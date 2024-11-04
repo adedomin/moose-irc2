@@ -1,0 +1,12 @@
+[Unit]
+Description=Moose2 IRC Bot
+After=moose2.service
+
+[Service]
+User=moose-%i
+ExecStart=/usr/local/bin/moose-irc2 -c /etc/moose-irc2/%i.json
+Restart=on-failure
+RestartSec=1min
+
+[Install]
+WantedBy=multi-user.target
