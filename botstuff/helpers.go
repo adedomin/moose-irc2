@@ -1,4 +1,4 @@
-/* 
+/*
  *  BSD 2-Clause License
  *
  *  Copyright (c) 2024, Anthony DeDominic
@@ -49,7 +49,7 @@ func newRes(m *irc.Message, reply string) *irc.Message {
 }
 
 func newDirectNotice(m *irc.Message, reply string) *irc.Message {
-	return &irc.Message{
+	wtf := &irc.Message{
 		Tags:    nil,
 		Prefix:  nil,
 		Command: "NOTICE",
@@ -58,6 +58,8 @@ func newDirectNotice(m *irc.Message, reply string) *irc.Message {
 			reply,
 		},
 	}
+	log.Printf("%+v", *wtf)
+	return wtf
 }
 
 func writeUknkErr(c *irc.Client, m *irc.Message, err error) {

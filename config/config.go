@@ -1,4 +1,4 @@
-/* 
+/*
  *  BSD 2-Clause License
  *
  *  Copyright (c) 2024, Anthony DeDominic
@@ -35,22 +35,33 @@ import (
 )
 
 type Config struct {
-	Nick       string
-	Pass       string
-	Host       string
-	Sasl       string
+	Nick string
+	Pass string
+	Host string
+	// note that SASL is too much work for now. deal with it.
+	Nickserv   string
 	Tls        bool
 	IgnoreBots bool     `json:"ignore-bots"`
 	SendDelay  Duration `json:"send-delay"`
 	MooseUrl   string   `json:"moose-url"`
+	Channels   []string
+	InviteFile string `json:"invite-file"`
+}
 
-	InviteFile string `json:"-"`
-
-	Channels       []string
-	InviteChannels sync.Map `json:"-"`
+type Invites struct {
+	inviteLock     sync.Mutex
+	inviteChannels map[string]struct{}
 }
 
 var C Config
+var gI Invites
+
+func HasInvite(ch string) bool {
+	gI.inviteLock.Lock()
+	defer gI.inviteLock.Unlock()
+	_, ok := gI.inviteChannels[ch]
+	return ok
+}
 
 func init() {
 	configPath := ""

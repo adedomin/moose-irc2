@@ -1,4 +1,4 @@
-/* 
+/*
  *  BSD 2-Clause License
  *
  *  Copyright (c) 2024, Anthony DeDominic
@@ -34,17 +34,10 @@ import (
 	"log"
 	"os"
 	"path"
-	"strings"
 )
 
 func ensureDirToFile(fpath string) {
-	pathComponents := strings.Split(fpath, string(os.PathSeparator))
-	pathComponents = pathComponents[:len(pathComponents)-1]
-	pathFull := path.Join(pathComponents...)
-	if pathFull == "" {
-		return
-	}
-	if err := os.MkdirAll(pathFull, 0700); err != nil {
+	if err := os.MkdirAll(path.Dir(fpath), 0700); err != nil {
 		log.Printf("Warn: Failed to ensure path to file (%s), see (%s)\n", fpath, err)
 	}
 }
@@ -108,11 +101,16 @@ func openAndLoadInvites(invitePath string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// init gI
+	gI.inviteChannels = make(map[string]struct{}, len(invites))
+	for _, val := range invites {
+		gI.inviteChannels[val] = struct{}{}
+	}
+
 	invites = append(invites, C.Channels...)
 	// struct{} is allegedly a Zero-Sized Type
 	uniq := make(map[string]struct{}, len(invites))
 	for _, val := range invites {
-		C.InviteChannels.Store(val, struct{}{})
 		uniq[val] = struct{}{}
 	}
 	C.Channels = make([]string, 0, len(invites))
@@ -127,20 +125,11 @@ const (
 )
 
 func SaveNewInvite(action int, newchan string) {
-	if action == AddInvite {
-		C.InviteChannels.Store(newchan, struct{}{})
-	} else {
-		C.InviteChannels.Delete(newchan)
-	}
+	gI.inviteLock.Lock()
+	defer gI.inviteLock.Unlock()
 
-	channels := make([]string, 0, 64)
-	C.InviteChannels.Range(func(k, _ any) bool {
-		key := k.(string)
-		channels = append(channels, key)
-		return true
-	})
-
-	file, err := os.CreateTemp("", ".invite.*.json")
+	tDir := path.Dir(C.InviteFile)
+	file, err := os.CreateTemp(tDir, ".invite.*.json")
 	if err != nil {
 		log.Printf("ERROR: Failed to open up temporary invite file: %s", err)
 		return
@@ -148,18 +137,44 @@ func SaveNewInvite(action int, newchan string) {
 	defer file.Close()
 	defer os.Remove(file.Name())
 
+	if action == AddInvite {
+		gI.inviteChannels[newchan] = struct{}{}
+	} else {
+		delete(gI.inviteChannels, newchan)
+	}
+	failed := false
+	// roll-back on error
+	defer func() {
+		if failed {
+			log.Println("ERROR: rolling back state of invites.")
+			if action == AddInvite {
+				delete(gI.inviteChannels, newchan)
+			} else {
+				gI.inviteChannels[newchan] = struct{}{}
+			}
+		}
+	}()
+
+	channels := make([]string, 0, len(gI.inviteChannels))
+	for key := range gI.inviteChannels {
+		channels = append(channels, key)
+	}
+
 	b, err := json.Marshal(&channels)
 	nwr, err := io.Copy(file, bytes.NewReader(b))
 	if err != nil {
 		log.Printf("ERROR: Failed to write to temporary invite file: %s", err)
+		failed = true
 		return
 	} else if int(nwr) != len(b) {
 		log.Println("ERROR: Failed to fully write to temporary invite file.")
+		failed = true
 		return
 	}
 	err = os.Rename(file.Name(), C.InviteFile)
 	if err != nil {
 		log.Printf("ERROR: Failed to move to temporary invite file over old invite file: %s", err)
+		failed = true
 		return
 	}
 	err = file.Sync()

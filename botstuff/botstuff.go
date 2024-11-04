@@ -28,25 +28,45 @@ package botstuff
 
 import (
 	"fmt"
+	"log"
 	"strings"
+	"sync/atomic"
 
 	"github.com/adedomin/moose-irc2/config"
 	"gopkg.in/irc.v4"
 )
 
+var lastMoose atomic.Int64
+
 func IrcHandler(c *irc.Client, m *irc.Message) {
+	log.Printf("DEBUG: from %s, comm %s, params %v", m.Name, m.Command, m.Params)
 	switch m.Command {
 	case irc.RPL_WELCOME:
 		c.Write(config.SplitChannelList(config.C.Channels))
+		log.Println("INFO: Connected.")
+		if config.C.Nickserv != "" {
+			go func() {
+				c.WriteMessage(&irc.Message{
+					Tags:    nil,
+					Prefix:  nil,
+					Command: "NICKSERV",
+					Params:  []string{"IDENTIFY", config.C.Nickserv},
+				})
+			}()
+		}
+	case "JOIN":
+		if len(m.Params) > 0 && c.CurrentNick() == m.Name {
+			log.Printf("INFO: Joined %s", m.Params[0])
+		}
 	case "INVITE":
-		handleInvite(c, m)
+		go handleInvite(c, m)
 	case "PART":
 		if len(m.Params) < 1 {
 			return
 		}
 		channelName := m.Params[0]
 		if c.CurrentNick() == m.Name {
-			handlePartKick(channelName, "PARTed")
+			go handlePartKick(channelName, "PARTed")
 		}
 	case "KICK":
 		if len(m.Params) < 3 {
@@ -56,7 +76,7 @@ func IrcHandler(c *irc.Client, m *irc.Message) {
 		target := m.Params[1]
 		reason := m.Params[2]
 		if target == c.CurrentNick() {
-			handlePartKick(channelName, reason)
+			go handlePartKick(channelName, reason)
 		}
 	case "PRIVMSG":
 		if len(m.Params) < 2 {
@@ -68,13 +88,13 @@ func IrcHandler(c *irc.Client, m *irc.Message) {
 		comm := parseMooseArgs(m.Params[1])
 		switch comm.cmd {
 		case mIrc, mImg:
-			handleApiCommand(comm, c, m)
+			go handleApiCommand(comm, c, m)
 		case mSearch:
-			handleSearch(comm.moose, c, m)
+			go handleSearch(comm.moose, c, m)
 		case mBots:
 			c.WriteMessage(newRes(m, fmt.Sprintf("Moose :: Make moose @ %s :: See .moose --help for usage", config.C.MooseUrl)))
 		case mHelp:
-			c.WriteMessage(newRes(m, "usage: ^[.!]?moose(?:img|search|me)? [--latest|--oldest|--random|--search|--image|--] moosename"))
+			c.WriteMessage(newRes(m, "usage: ^[.!]?moose(?:img|search|me)? [--latest|--random|--search|--image|--] moosename"))
 		}
 	}
 }

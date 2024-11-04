@@ -35,12 +35,28 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/adedomin/moose-irc2/config"
 	"gopkg.in/irc.v4"
 )
 
 func handleApiCommand(comm command, c *irc.Client, m *irc.Message) {
+	oldTime := lastMoose.Load()
+casloop:
+	for {
+		now := time.Now().Unix()
+		if now-oldTime > 10 {
+			if !lastMoose.CompareAndSwap(oldTime, now) {
+				oldTime = lastMoose.Load()
+			} else {
+				break casloop
+			}
+		} else {
+			c.WriteMessage(newDirectNotice(m, "Please wait"))
+			return
+		}
+	}
 	mooseName, err := resolveLatestRandom(comm.moose)
 	if err != nil {
 		if errors.Is(err, noSuchMoose) {
@@ -57,6 +73,11 @@ func handleApiCommand(comm command, c *irc.Client, m *irc.Message) {
 			return
 		}
 		defer discardAndCloseBody(resp)
+
+		if resp.StatusCode != 200 {
+			c.WriteMessage(newRes(m, fmt.Sprintf("Unexpected Status getting moose: %s", resp.Status)))
+			return
+		}
 
 		bufread := bufio.NewReader(resp.Body)
 		for {
@@ -135,15 +156,22 @@ func handleInvite(c *irc.Client, m *irc.Message) {
 	}
 	channelName := m.Params[1]
 	// check if already invited.
-	if _, ok := config.C.InviteChannels.Load(channelName); ok {
+	if config.HasInvite(channelName) {
 		return
 	}
+	c.WriteMessage(&irc.Message{
+		Tags:    nil,
+		Prefix:  nil,
+		Command: "JOIN",
+		Params:  []string{channelName},
+	})
+	log.Printf("INFO: Invited to %s", channelName)
 	config.SaveNewInvite(config.AddInvite, channelName)
 }
 
 func handlePartKick(channelName, reason string) {
-	if _, ok := config.C.InviteChannels.Load(channelName); ok {
+	if config.HasInvite(channelName) {
 		config.SaveNewInvite(config.DelInvite, channelName)
 	}
-	log.Printf("INFO: Removed from channel; reason: %s", reason)
+	log.Printf("INFO: Removed from channel %s; reason: %s", channelName, reason)
 }
