@@ -39,7 +39,6 @@ import (
 var lastMoose atomic.Int64
 
 func IrcHandler(c *irc.Client, m *irc.Message) {
-	log.Printf("DEBUG: from %s, comm %s, params %v", m.Name, m.Command, m.Params)
 	switch m.Command {
 	case irc.RPL_WELCOME:
 		c.Write(config.SplitChannelList(config.C.Channels))

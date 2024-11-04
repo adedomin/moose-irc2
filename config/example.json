@@ -1,7 +1,7 @@
 { "nick": "MrMoose"
 , "host": "irc.rizon.net:6667"
 , "pass": "server pass or leave blank"
-, "sasl": "nickserv pass"
+, "nickserv": "nickserv pass"
 , "tls": false
 , "channels":
   [ "#moose2-irc"
@@ -9,4 +9,5 @@
 , "ignore-bots": true
 , "send-delay": "350ms"
 , "moose-url": "https://moose2.ghetty.space"
+, "invite-file": "file to persist invites, can also be passed via -i --invite on cmdline."
 }
