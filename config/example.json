@@ -1,0 +1,12 @@
+{ "nick": "MrMoose"
+, "host": "irc.rizon.net:6667"
+, "pass": "server pass or leave blank"
+, "sasl": "nickserv pass"
+, "tls": false
+, "channels":
+  [ "#moose2-irc"
+  ]
+, "ignore-bots": true
+, "send-delay": "350ms"
+, "moose-url": "https://moose2.ghetty.space"
+}
