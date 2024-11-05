@@ -35,11 +35,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/adedomin/moose-irc2/config"
 	"gopkg.in/irc.v4"
 )
+
+var lastMoose atomic.Int64
 
 func handleApiCommand(comm command, c *irc.Client, m *irc.Message) {
 	oldTime := lastMoose.Load()

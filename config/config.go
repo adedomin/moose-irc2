@@ -39,13 +39,14 @@ type Config struct {
 	Pass string
 	Host string
 	// note that SASL is too much work for now. deal with it.
-	Nickserv   string
-	Tls        bool
-	IgnoreBots bool     `json:"ignore-bots"`
-	SendDelay  Duration `json:"send-delay"`
-	MooseUrl   string   `json:"moose-url"`
-	Channels   []string
-	InviteFile string `json:"invite-file"`
+	Nickserv     string
+	Tls          bool
+	IgnoreBots   bool     `json:"ignore-bots"`
+	SendDelay    Duration `json:"send-delay"`
+	MooseUrl     string   `json:"moose-url"`
+	Channels     []string
+	InviteFile   string   `json:"invite-file"`
+	GatewayUsers []string `json:"gateway-users"`
 }
 
 type Invites struct {

@@ -1,4 +1,4 @@
-/* 
+/*
  *  BSD 2-Clause License
  *
  *  Copyright (c) 2024, Anthony DeDominic
@@ -117,5 +117,6 @@ loop:
 			}
 		}
 	}
+	ret.moose = strings.TrimSpace(ret.moose)
 	return ret
 }

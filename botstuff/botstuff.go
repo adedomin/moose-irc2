@@ -29,43 +29,43 @@ package botstuff
 import (
 	"fmt"
 	"log"
+	"slices"
 	"strings"
-	"sync/atomic"
 
 	"github.com/adedomin/moose-irc2/config"
 	"gopkg.in/irc.v4"
 )
 
-var lastMoose atomic.Int64
-
 func IrcHandler(c *irc.Client, m *irc.Message) {
+	go realIrcHandler(c, m)
+}
+
+func realIrcHandler(c *irc.Client, m *irc.Message) {
 	switch m.Command {
 	case irc.RPL_WELCOME:
 		c.Write(config.SplitChannelList(config.C.Channels))
 		log.Println("INFO: Connected.")
 		if config.C.Nickserv != "" {
-			go func() {
-				c.WriteMessage(&irc.Message{
-					Tags:    nil,
-					Prefix:  nil,
-					Command: "NICKSERV",
-					Params:  []string{"IDENTIFY", config.C.Nickserv},
-				})
-			}()
+			c.WriteMessage(&irc.Message{
+				Tags:    nil,
+				Prefix:  nil,
+				Command: "NICKSERV",
+				Params:  []string{"IDENTIFY", config.C.Nickserv},
+			})
 		}
 	case "JOIN":
 		if len(m.Params) > 0 && c.CurrentNick() == m.Name {
 			log.Printf("INFO: Joined %s", m.Params[0])
 		}
 	case "INVITE":
-		go handleInvite(c, m)
+		handleInvite(c, m)
 	case "PART":
 		if len(m.Params) < 1 {
 			return
 		}
 		channelName := m.Params[0]
 		if c.CurrentNick() == m.Name {
-			go handlePartKick(channelName, "PARTed")
+			handlePartKick(channelName, "PARTed")
 		}
 	case "KICK":
 		if len(m.Params) < 3 {
@@ -75,21 +75,31 @@ func IrcHandler(c *irc.Client, m *irc.Message) {
 		target := m.Params[1]
 		reason := m.Params[2]
 		if target == c.CurrentNick() {
-			go handlePartKick(channelName, reason)
+			handlePartKick(channelName, reason)
 		}
 	case "PRIVMSG":
 		if len(m.Params) < 2 {
 			return
 		}
-		// Trim leading and trailing spaces to not trip up our
-		// plugins.
-		m.Params[1] = strings.TrimSpace(m.Params[1])
+		// Assumption: Gateways will do stuff like "<nick> msg here"
+		//             where nick does not contain whitespace.
+		isGateway := slices.Contains(config.C.GatewayUsers, m.Name)
+		if isGateway {
+			gatewayStripped := strings.SplitN(m.Params[1], " ", 2)
+			if len(gatewayStripped) == 2 {
+				m.Params[1] = gatewayStripped[1]
+			}
+		}
 		comm := parseMooseArgs(m.Params[1])
 		switch comm.cmd {
 		case mIrc, mImg:
-			go handleApiCommand(comm, c, m)
+			// gateway users will likely not get much benefit from moose irc lines
+			if isGateway {
+				comm.cmd = mImg
+			}
+			handleApiCommand(comm, c, m)
 		case mSearch:
-			go handleSearch(comm.moose, c, m)
+			handleSearch(comm.moose, c, m)
 		case mBots:
 			c.WriteMessage(newRes(m, fmt.Sprintf("Moose :: Make moose @ %s :: See .moose --help for usage", config.C.MooseUrl)))
 		case mHelp:

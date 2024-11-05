@@ -25,5 +25,4 @@ go.work.sum
 .env
 
 moose-irc2
-dev-config.json
-dev-invites.json
+dev-*.json

@@ -10,4 +10,8 @@
 , "send-delay": "350ms"
 , "moose-url": "https://moose2.ghetty.space"
 , "invite-file": "file to persist invites, can also be passed via -i --invite on cmdline."
+, "gateway-users":
+  [ "List of users that proxy other clients, like matterbridge."
+  , "This setting lets those users interact IMAGE ONLY with the bot."
+  ]
 }
