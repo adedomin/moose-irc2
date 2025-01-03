@@ -14,4 +14,5 @@
   [ "List of users that proxy other clients, like matterbridge."
   , "This setting lets those users interact IMAGE ONLY with the bot."
   ]
+, "disable-search": false
 }

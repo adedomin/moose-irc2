@@ -118,6 +118,11 @@ type searchBody struct {
 const maxResultSet = 12
 
 func handleSearch(query string, c *irc.Client, m *irc.Message) {
+	if config.C.DisableSearch {
+		c.WriteMessage(newRes(m, "Search is disabled because of network spam filter."))
+		return
+	}
+
 	querySafe := url.QueryEscape(query)
 	resp, err := http.Get(fmt.Sprintf("%s/search?q=%s&p=0", config.C.MooseUrl, querySafe))
 	if err != nil {
