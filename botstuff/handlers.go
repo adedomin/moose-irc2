@@ -119,7 +119,7 @@ const maxResultSet = 12
 
 func handleSearch(query string, c *irc.Client, m *irc.Message) {
 	if config.C.DisableSearch {
-		c.WriteMessage(newRes(m, "Search is disabled because of network spam filter."))
+		c.WriteMessage(newRes(m, fmt.Sprintf("Search is disabled because of network spam filter. use the webpage: %s/gallery/0", config.C.MooseUrl)))
 		return
 	}
 
