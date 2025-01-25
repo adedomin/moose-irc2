@@ -34,14 +34,15 @@ pub struct Config {
     #[serde(default)]
     pub tls: bool,
     pub nickserv: Option<String>,
-    #[serde(default, deserialize_with = "from_dur_str")]
+    #[serde(default, deserialize_with = "from_dur_str", alias = "send-delay")]
     pub send_delay: Duration,
-    #[serde(default = "default_moose_url")]
+    #[serde(default = "default_moose_url", alias = "moose-url")]
     pub moose_url: String,
     #[serde(default)]
     pub channels: HashSet<String>,
+    #[serde(alias = "invite-file")]
     pub invite_file: Option<PathBuf>,
-    #[serde(default)]
+    #[serde(default, alias = "disable-search")]
     pub disable_search: bool,
 }
 
@@ -92,7 +93,6 @@ const EXAMPLE_CONFIG: &[u8] = br###"{ "nick": "MrMoose"
 , "channels":
   [ "#moose2-irc"
   ]
-, "ignore-bots": true
 , "send-delay": "350ms"
 , "moose-url": "https://moose2.ghetty.space"
 , "invite-file": "file to persist invites"

@@ -1,54 +1,67 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, mem};
 
-pub fn irc_preamble(nick: &str, pass: &str) -> Vec<u8> {
-    let mut pre = format!(
-        "NICK {0}\r
-USER {1} +i * {0}\r
-",
-        nick, "moose-irc2"
-    )
-    .as_bytes()
-    .to_vec();
+use irc::proto::{Command, Message};
+
+pub fn irc_preamble(nick: &str, pass: &str) -> Vec<Message> {
+    let mut preamble: Vec<Message> = vec![
+        Command::NICK(nick.to_owned()).into(),
+        Command::USER(nick.to_owned(), "moose-irc2".to_owned()).into(),
+    ];
     if !pass.is_empty() {
-        pre.extend(b"PASS ");
-        pre.extend(pass.as_bytes());
-        pre.extend(b"\r\n");
+        preamble.push(Command::PASS(pass.to_owned()).into());
     }
-    pre
+    preamble
 }
 
-fn join_part_channels(command: &[u8], channels: &HashSet<String>) -> Vec<u8> {
+/// create a series of JOIN/PART commands to join a large number of channels in fewer commands.
+fn join_part_channels(channels: &HashSet<String>) -> Vec<String> {
     let mut ret = vec![];
-    let mut lsize = ret.len();
-    let mut first = true;
-
-    for channel in channels {
-        if channel.len() + lsize >= 510 {
-            lsize = 0usize;
-            first = true;
-            ret.extend(b"\r\n");
-        }
-
-        if !first {
-            ret.push(b',');
-        } else {
-            ret.extend(command);
-            ret.push(b' ');
-            lsize = command.len();
-            first = false;
-        }
-        ret.extend(channel.as_bytes());
-        lsize += channel.len() + 1;
+    if channels.is_empty() {
+        return ret;
     }
-    ret.extend(b"\r\n");
-
+    let mut cur = String::default();
+    channels.iter().for_each(|channel| {
+        // 512 - 2 (CRLF) - 5 (JOIN or PART + SPACE) = 505
+        if channel.len() + cur.len() > 505 {
+            ret.push(mem::take(&mut cur));
+        }
+        if !cur.is_empty() {
+            cur.push(',');
+        }
+        cur.push_str(channel);
+    });
+    ret.push(cur);
     ret
 }
 
-pub fn join_channels(channels: &HashSet<String>) -> Vec<u8> {
-    join_part_channels(b"JOIN", channels)
+pub fn join_channels(channels: &HashSet<String>) -> impl Iterator<Item = Command> {
+    join_part_channels(channels)
+        .into_iter()
+        .map(|s| Command::JOIN(s, None))
 }
 
-pub fn part_channels(channels: &HashSet<String>) -> Vec<u8> {
-    join_part_channels(b"PART", channels)
+pub fn part_channels(channels: &HashSet<String>) -> impl Iterator<Item = Command> {
+    join_part_channels(channels)
+        .into_iter()
+        .map(|s| Command::PART(s, None))
+}
+
+fn security<'a>(tls: bool) -> irc::connection::Security<'a> {
+    if tls {
+        irc::connection::Security::Secured {
+            root_cert_path: None,
+            client_cert_path: None,
+            client_key_path: None,
+        }
+    } else {
+        irc::connection::Security::Unsecured
+    }
+}
+
+pub fn client_config(server: &str, port: u16, tls: bool) -> irc::connection::Config {
+    irc::connection::Config {
+        server,
+        port,
+        security: security(tls),
+    }
 }

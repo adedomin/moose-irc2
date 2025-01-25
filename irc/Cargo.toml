@@ -2,5 +2,19 @@
 name = "irc"
 version = "0.1.0"
 edition = "2021"
+description = "IRC codec for Tokio users."
+authors = ["Casper Rogild Storm", "Cory Forsstrom", "Anthony DeDominic"]
+license = "GPL-3.0-or-later"
 
 [dependencies]
+futures = "0.3"
+thiserror = "2"
+tokio = { version = "1", default-features = false, features = ["rt", "net", "macros", "io-util", "fs"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["tls12"] }
+tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
+rustls-native-certs = "0.8"
+rustls-pemfile = "2.2"
+
+[dependencies.proto]
+path = "proto"
+package = "irc_proto"
