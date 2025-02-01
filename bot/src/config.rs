@@ -86,12 +86,13 @@ fn default_moose_url() -> String {
 }
 
 const EXAMPLE_CONFIG: &[u8] = br###"{ "nick": "MrMoose"
-, "host": "irc.rizon.net:6667"
+, "host": "irc.rizon.net:6697"
+, "// pass": "you can append any field with // to comment it out."
 , "pass": "server pass, omit or leave empty."
 , "nickserv": "nickserv password."
-, "tls": false
+, "tls": true
 , "channels":
-  [ "#moose2-irc"
+  [ "#moose-irc2"
   ]
 , "send-delay": "350ms"
 , "moose-url": "https://moose2.ghetty.space"
@@ -104,7 +105,7 @@ const EXAMPLE_CONFIG: &[u8] = br###"{ "nick": "MrMoose"
 #[command(
     name = "moose-irc2",
     version,
-    about = "Nextgen Moose serving and authoring web application."
+    about = "IRC Bot for serving moose2 content."
 )]
 pub struct Args {
     #[arg(short, long, help = "Configuration file.")]

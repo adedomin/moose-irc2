@@ -25,18 +25,10 @@ use tasks::{
 use tokio::sync::{broadcast, mpsc};
 
 mod config;
+mod handler;
 mod helpers;
 mod tasks;
 mod tls;
-
-// macro_rules! enclose {
-//     ( ($( $x:ident ),*) $y:expr ) => {
-//         {
-//             $(let $x = $x.clone();)*
-//             $y
-//         }
-//     };
-// }
 
 fn default_port(tls: bool) -> u16 {
     if tls {

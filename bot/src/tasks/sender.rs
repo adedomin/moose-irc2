@@ -17,17 +17,22 @@ pub fn sender_task(
 ) -> JoinHandle<()> {
     tokio::task::spawn(async move {
         let mut recv_shut = send_shut.subscribe();
-        println!("{send_delay:?}");
-        let mut interval = tokio::time::interval(send_delay);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut interval = if send_delay.is_zero() {
+            None
+        } else {
+            let mut i = tokio::time::interval(send_delay);
+            i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            Some(i)
+        };
         while let Some(msg) = tokio::select! {
             m = recv.recv() => m,
             _ = recv_shut.recv() => None,
         } {
-            let m = match msg {
-                SendMsg::Immediate(m) => m,
-                SendMsg::Delayed(m) => {
-                    interval.tick().await;
+            let m = match (msg, interval.as_mut()) {
+                (SendMsg::Immediate(m), _) => m,
+                (SendMsg::Delayed(m), None) => m,
+                (SendMsg::Delayed(m), Some(i)) => {
+                    i.tick().await;
                     m
                 }
             };

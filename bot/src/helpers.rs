@@ -2,6 +2,8 @@ use std::{collections::HashSet, mem};
 
 use irc::proto::{Command, Message};
 
+pub const CONFLICT_FILLER: &str = "_";
+
 pub fn irc_preamble(nick: &str, pass: &str) -> Vec<Message> {
     let mut preamble: Vec<Message> = vec![
         Command::NICK(nick.to_owned()).into(),
@@ -64,4 +66,51 @@ pub fn client_config(server: &str, port: u16, tls: bool) -> irc::connection::Con
         port,
         security: security(tls),
     }
+}
+
+// #[derive(PartialEq)]
+// pub enum CaseMapping {
+//     Ascii,
+//     Rfc1459,
+//     Unicode, // Too much work?
+// }
+
+// /// Uppercases a slice and returns a copy.
+// /// Note that this function currently only supports CASEMAPPING=ascii or CASEMAPPING=rfc1459
+// pub fn irc_uppercase(casemap: &CaseMapping, the_str: &[u8]) -> Vec<u8> {
+//     the_str
+//         .iter()
+//         .map(|&chr| match chr {
+//             b'a'..=b'z' => chr - 32u8,
+//             b'{'..=b'}' if *casemap == CaseMapping::Rfc1459 => chr - 32u8,
+//             b'^' if *casemap == CaseMapping::Rfc1459 => chr + 32,
+//             _ => chr,
+//         })
+//         .collect::<Vec<u8>>()
+// }
+
+// /// compare two byte sequences using the given irc casemapping rules.
+// pub fn case_cmp(casemap: &CaseMapping, lhs: &[u8], rhs: &[u8]) -> bool {
+//     irc_uppercase(casemap, lhs) == irc_uppercase(casemap, rhs)
+// }
+
+pub fn is_me(ours: &str, rename_cnt: u8, target: &str) -> bool {
+    if rename_cnt == 0 {
+        ours == target
+    } else if target.len() == ours.len() + rename_cnt as usize {
+        &target[..ours.len()] == ours
+            && target[ours.len()..] == CONFLICT_FILLER.repeat(rename_cnt as usize)
+    } else {
+        false
+    }
+}
+
+#[macro_export]
+macro_rules! enclose {
+    ( ($( $x:ident ),*) $y:expr ) => {
+        {
+            $(let $x = $x.clone();)*
+            $y
+        }
+    };
 }
