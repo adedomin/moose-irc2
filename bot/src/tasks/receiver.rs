@@ -7,7 +7,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{config::Config, enclose, handler, helpers::irc_preamble};
+use crate::{capture_clone, config::Config, handler, helpers::irc_preamble};
 
 use super::{invite::InviteMsg, sender::SendMsg};
 
@@ -42,7 +42,7 @@ pub fn receiver_task(
                 Ok(Ok(msg)) => {
                     if task_limit.try_acquire().is_ok() {
                         tokio::spawn(
-                            enclose! { (sendi, sendo, arc_config) async move { handler::handle(arc_config, msg, sendi, sendo, &RENAME_COUNTER).await }},
+                            capture_clone! { (sendi, sendo, arc_config) async move { handler::handle(arc_config, msg, sendi, sendo, &RENAME_COUNTER).await } },
                         );
                     } else {
                         eprintln!("WARN: [task/receiver] Too many messages! Dropping some events.");

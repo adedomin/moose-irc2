@@ -106,7 +106,7 @@ pub fn is_me(ours: &str, rename_cnt: u8, target: &str) -> bool {
 }
 
 #[macro_export]
-macro_rules! enclose {
+macro_rules! capture_clone {
     ( ($( $x:ident ),*) $y:expr ) => {
         {
             $(let $x = $x.clone();)*
