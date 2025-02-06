@@ -705,6 +705,7 @@ dependencies = [
  "clap",
  "futures",
  "irc",
+ "percent-encoding",
  "rand",
  "reqwest",
  "serde",

@@ -94,17 +94,6 @@ pub fn client_config(server: &str, port: u16, tls: bool) -> irc::connection::Con
 //     irc_uppercase(casemap, lhs) == irc_uppercase(casemap, rhs)
 // }
 
-pub fn is_me(ours: &str, rename_cnt: u8, target: &str) -> bool {
-    if rename_cnt == 0 {
-        ours == target
-    } else if target.len() == ours.len() + rename_cnt as usize {
-        &target[..ours.len()] == ours
-            && target[ours.len()..] == CONFLICT_FILLER.repeat(rename_cnt as usize)
-    } else {
-        false
-    }
-}
-
 #[macro_export]
 macro_rules! capture_clone {
     ( ($( $x:ident ),*) $y:expr ) => {

@@ -1,6 +1,10 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::PathBuf,
+    thread::{self, JoinHandle},
+};
 
-use tokio::{sync::mpsc::Receiver, task::JoinHandle};
+use tokio::sync::mpsc::Receiver;
 
 use crate::config::save_invite;
 
@@ -14,7 +18,8 @@ pub fn invite_task(
     invites: Option<(HashSet<String>, PathBuf)>,
     mut recv: Receiver<InviteMsg>,
 ) -> JoinHandle<()> {
-    tokio::task::spawn_blocking(move || {
+    // tokio spawn_blocking is not intended for long (infinite) lived tasks.
+    thread::spawn(move || {
         if let Some((mut invites, ifile)) = invites {
             while let Some(invite) = recv.blocking_recv() {
                 let changed = match invite {

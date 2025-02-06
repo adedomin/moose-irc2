@@ -10,6 +10,7 @@ license = "BSD-2-Clause"
 clap = { version = "=4.5.24", features = ["derive"] }
 futures = "0.3"
 irc = { path = "../irc" }
+percent-encoding = "2"
 rand = { version = "0.8.5", features = ["std", "std_rng"], default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }

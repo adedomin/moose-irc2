@@ -72,6 +72,7 @@ fn main() {
         let sender = sender_task(config.send_delay, sendm, recvo, sendshut.clone());
 
         let receiver = receiver_task(config, recvm, sendo, sendi, sendshut, recvshut);
-        let _ = tokio::join!(sender, receiver, shutdown, inviter);
+        let _ = tokio::join!(sender, receiver, shutdown);
+        let _ = inviter.join();
     });
 }
