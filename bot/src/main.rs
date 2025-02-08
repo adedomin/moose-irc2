@@ -29,6 +29,7 @@ mod handler;
 mod helpers;
 mod tasks;
 mod tls;
+mod webreq;
 
 fn default_port(tls: bool) -> u16 {
     if tls {

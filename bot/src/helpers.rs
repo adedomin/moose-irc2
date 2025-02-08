@@ -42,11 +42,11 @@ pub fn join_channels(channels: &HashSet<String>) -> impl Iterator<Item = Command
         .map(|s| Command::JOIN(s, None))
 }
 
-pub fn part_channels(channels: &HashSet<String>) -> impl Iterator<Item = Command> {
-    join_part_channels(channels)
-        .into_iter()
-        .map(|s| Command::PART(s, None))
-}
+// pub fn part_channels(channels: &HashSet<String>) -> impl Iterator<Item = Command> {
+//     join_part_channels(channels)
+//         .into_iter()
+//         .map(|s| Command::PART(s, None))
+// }
 
 fn security<'a>(tls: bool) -> irc::connection::Security<'a> {
     if tls {

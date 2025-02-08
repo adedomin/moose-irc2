@@ -1,12 +1,19 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use irc::proto::{command::Numeric, Command, Message, Source, User};
-use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tokio::{
+    sync::{mpsc::Sender, Mutex, RwLock},
+    time::sleep,
+};
 
 use crate::{
     helpers::{join_channels, CONFLICT_FILLER},
     tasks::{invite::InviteMsg, sender::SendMsg},
+    webreq::{get_irclines, resolve_moosename},
 };
+
+const APP_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+static MOOSE_OUTPUT_LOCK: Mutex<()> = Mutex::const_new(());
 
 pub struct IrcState {
     original_nick: String,
@@ -14,7 +21,7 @@ pub struct IrcState {
     nickserv_pass: Option<String>,
     channels: HashSet<String>,
     moose_url: String,
-    moose_lock: Mutex<()>,
+    moose_client: reqwest::Client,
 }
 
 impl IrcState {
@@ -24,19 +31,24 @@ impl IrcState {
         channels: HashSet<String>,
         moose_url: String,
     ) -> Self {
+        let moose_client = reqwest::Client::builder()
+            .user_agent(APP_NAME)
+            .timeout(Duration::from_secs(5))
+            .build()
+            .expect("FATAL: [irc] Expected to build HTTP client.");
         Self {
             original_nick: nick.clone(),
             current_nick: nick,
             nickserv_pass,
             channels,
             moose_url,
-            moose_lock: Mutex::new(()),
+            moose_client,
         }
     }
 }
 
 const HELP_RESP: &str =
-    "usage: ^[.!]?moose(?:img|search|me)? [--latest|--random|--search|--image|--] moosename";
+    "usage: ^[.!]?moose(?:img|search|me)? [--latest|--random|--search|--image|--] [moosename]";
 
 enum MComm {
     Help,
@@ -142,15 +154,7 @@ pub async fn handle(
         {
             sendo
                 .send(SendMsg::Delayed(
-                    Command::NOTICE(
-                        sender,
-                        format!(
-                            "\x01VERSION {}/{}\x01",
-                            env!("CARGO_PKG_NAME"),
-                            env!("CARGO_PKG_VERSION")
-                        ),
-                    )
-                    .into(),
+                    Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into(),
                 ))
                 .await
         }
@@ -171,8 +175,53 @@ pub async fn handle(
                         )
                     ),
                     MComm::Search(_) => todo!(),
-                    MComm::Image(_) => todo!(),
-                    MComm::Irc(_) => todo!(),
+                    MComm::Image(q) => {
+                        match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
+                            Ok(moose) => format!("{}/img/{}", &rstate.moose_url, &moose),
+                            Err(e) => e.to_string(),
+                        }
+                    }
+                    MComm::Irc(q) => {
+                        match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
+                            Ok(moose) => match MOOSE_OUTPUT_LOCK.try_lock() {
+                                Ok(_) => {
+                                    match get_irclines(
+                                        &rstate.moose_client,
+                                        &rstate.moose_url,
+                                        &moose,
+                                    )
+                                    .await
+                                    {
+                                        Ok(lines) => {
+                                            let _ = lines.lines().try_for_each(|line| {
+                                                sendo.try_send(SendMsg::Delayed(
+                                                    Command::PRIVMSG(
+                                                        channel.clone(),
+                                                        line.to_owned(),
+                                                    )
+                                                    .into(),
+                                                ))
+                                            });
+                                            sleep(Duration::from_secs(10)).await;
+                                            return;
+                                        }
+                                        Err(e) => e.to_string(),
+                                    }
+                                }
+                                Err(_) => {
+                                    let _ = sendo.send(SendMsg::Delayed(
+                                        Command::NOTICE(
+                                            sender,
+                                            "Please wait awhile before asking for another moose.".to_owned(),
+                                        )
+                                        .into(),
+                                    )).await;
+                                    return;
+                                }
+                            },
+                            Err(e) => e.to_string(),
+                        }
+                    }
                 };
                 sendo
                     .send(SendMsg::Delayed(Command::PRIVMSG(channel, resp).into()))
