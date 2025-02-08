@@ -9,7 +9,7 @@ use tokio::{
 use crate::{
     helpers::{join_channels, CONFLICT_FILLER},
     tasks::{invite::InviteMsg, sender::SendMsg},
-    webreq::{get_irclines, resolve_moosename},
+    webreq::{get_irclines, get_search, resolve_moosename},
 };
 
 const APP_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -174,7 +174,9 @@ pub async fn handle(
                             percent_encoding::NON_ALPHANUMERIC
                         )
                     ),
-                    MComm::Search(_) => todo!(),
+                    MComm::Search(q) => get_search(&rstate.moose_client, &rstate.moose_url, &q)
+                        .await
+                        .unwrap_or_else(|e| e.to_string()),
                     MComm::Image(q) => {
                         match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
                             Ok(moose) => format!("{}/img/{}", &rstate.moose_url, &moose),

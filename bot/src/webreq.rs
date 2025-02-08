@@ -1,3 +1,4 @@
+use percent_encoding::PercentEncode;
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -5,6 +6,22 @@ use serde::Deserialize;
 struct ResolveRequest {
     status: String,
     msg: String,
+}
+
+#[derive(Deserialize)]
+struct SearchResult {
+    result: Vec<SearchMoose>,
+}
+
+#[derive(Deserialize)]
+struct SearchMoose {
+    page: usize,
+    moose: SearchMooseName,
+}
+
+#[derive(Deserialize)]
+struct SearchMooseName {
+    name: String,
 }
 
 impl From<ResolveRequest> for ResolveError {
@@ -21,6 +38,10 @@ pub enum ResolveError {
     Upstream(String),
 }
 
+fn urlencode<'a>(q: &'a [u8]) -> PercentEncode<'a> {
+    percent_encoding::percent_encode(q, percent_encoding::NON_ALPHANUMERIC)
+}
+
 pub async fn resolve_moosename(
     client: &Client,
     url: &str,
@@ -30,7 +51,7 @@ pub async fn resolve_moosename(
         .get(format!(
             "{}/api-helper/resolve/{}",
             url,
-            percent_encoding::percent_encode(moose.as_bytes(), percent_encoding::NON_ALPHANUMERIC)
+            urlencode(moose.as_bytes()),
         ))
         .send()
         .await?
@@ -51,4 +72,30 @@ pub async fn get_irclines(client: &Client, url: &str, moose: &str) -> Result<Str
     } else {
         Err(res.json::<ResolveRequest>().await?.into())
     }
+}
+
+// note this api should always succeed.
+pub async fn get_search(client: &Client, url: &str, query: &str) -> Result<String, ResolveError> {
+    Ok(client
+        .get(format!(
+            "{}/search?p=0&q={}",
+            url,
+            urlencode(query.as_bytes())
+        ))
+        .send()
+        .await?
+        .json::<SearchResult>()
+        .await?
+        .result
+        .into_iter()
+        .fold((String::with_capacity(256), true), |(mut acc, first), s| {
+            if first {
+                acc.push_str(format!("\u{2}{}\u{2} p.{}", s.moose.name, s.page).as_str());
+                (acc, false)
+            } else {
+                acc.push_str(format!(", \u{2}{}\u{2} p.{}", s.moose.name, s.page).as_str());
+                (acc, false)
+            }
+        })
+        .0)
 }
