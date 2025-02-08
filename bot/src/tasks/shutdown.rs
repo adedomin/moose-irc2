@@ -24,6 +24,6 @@ pub fn shutdown_task(send: Sender<()>, sendi: mpsc::Sender<InviteMsg>) -> JoinHa
             }
         }
         // is a blocking thread, better to cooperate.
-        let _ = sendi.send(InviteMsg::Quit);
+        let _ = sendi.send(InviteMsg::Quit).await;
     })
 }

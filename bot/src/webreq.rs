@@ -38,7 +38,7 @@ pub enum ResolveError {
     Upstream(String),
 }
 
-fn urlencode<'a>(q: &'a [u8]) -> PercentEncode<'a> {
+fn urlencode(q: &[u8]) -> PercentEncode<'_> {
     percent_encoding::percent_encode(q, percent_encoding::NON_ALPHANUMERIC)
 }
 
