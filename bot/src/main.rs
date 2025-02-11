@@ -20,7 +20,10 @@ use config::parse_args;
 use futures::StreamExt;
 use helpers::client_config;
 use tasks::{
-    invite::invite_task, receiver::receiver_task, sender::sender_task, shutdown::shutdown_task,
+    invite::invite_task,
+    receiver::receiver_task,
+    sender::{create_send_recv_pair, sender_task},
+    shutdown::shutdown_task,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -55,7 +58,7 @@ fn main() {
         let inviter = invite_task(i, recvi);
 
         let (sendshut, recvshut) = broadcast::channel::<()>(16);
-        let shutdown = shutdown_task(sendshut.clone(), sendi.clone());
+        let shutdown = shutdown_task(sendshut.clone());
 
         let (server, port) = config
             .host
@@ -69,7 +72,7 @@ fn main() {
         .await
         .expect("Expected to set up connection.")
         .split();
-        let (sendo, recvo) = mpsc::channel(64);
+        let (sendo, recvo) = create_send_recv_pair();
         let sender = sender_task(config.send_delay, sendm, recvo, sendshut.clone());
 
         let receiver = receiver_task(config, recvm, sendo, sendi, sendshut, recvshut);

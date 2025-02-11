@@ -8,7 +8,7 @@ use tokio::{
 
 use crate::{
     helpers::{join_channels, CONFLICT_FILLER},
-    tasks::{invite::InviteMsg, sender::SendMsg},
+    tasks::{invite::InviteMsg, sender},
     webreq::{get_irclines, get_search, resolve_moosename},
 };
 
@@ -104,8 +104,8 @@ pub async fn handle(
     state: Arc<RwLock<IrcState>>,
     msg: Message,
     disable_search: bool,
+    sendo: sender::Sender,
     sendi: Sender<InviteMsg>,
-    sendo: Sender<SendMsg>,
 ) {
     let sender = match msg.source {
         Some(Source::Server(server)) => server,
@@ -113,33 +113,30 @@ pub async fn handle(
         None => "".to_owned(),
     };
     let rstate = state.read().await;
-    let _ = match msg.command {
-        Command::PING(pong) => {
-            sendo
-                .send(SendMsg::Immediate(Command::PONG(pong, None).into()))
-                .await
-        }
+    match msg.command {
+        Command::PING(pong) => sendo.send_high_prio(Command::PONG(pong, None).into()).await,
         Command::ERROR(banned) => {
             eprintln!("ERR: [irc] Banned (?): {banned}");
-            sendo
-                .send(SendMsg::Immediate(Command::QUIT(None).into()))
-                .await
+            sendo.send_high_prio(Command::QUIT(None).into()).await
         }
         Command::JOIN(channel, _) if rstate.current_nick == sender => {
             eprintln!("INFO: [irc] Joined {channel}");
-            Ok(())
         }
         // shouldn't happen?
         Command::PART(channel, _) if rstate.current_nick == sender => {
             eprintln!("INFO: [irc] Parted {channel}");
             let _ = sendi.try_send(InviteMsg::Kicked(channel));
-            Ok(())
         }
         Command::INVITE(target, channel) if rstate.current_nick == target => {
-            let _ = sendi.try_send(InviteMsg::Joined(channel.clone()));
-            sendo
-                .send(SendMsg::Delayed(Command::JOIN(channel, None).into()))
-                .await
+            if sendi.try_send(InviteMsg::Joined(channel.clone())).is_ok() {
+                sendo
+                    .send_high_prio(Command::JOIN(channel, None).into())
+                    .await;
+            } else {
+                sendo.send_notify(
+                    Command::NOTICE(sender, "Invites are disabled.".to_owned()).into(),
+                );
+            }
         }
         Command::KICK(channel, target, reason) if rstate.current_nick == target => {
             eprintln!(
@@ -147,16 +144,13 @@ pub async fn handle(
                 reason.unwrap_or_default()
             );
             let _ = sendi.try_send(InviteMsg::Kicked(channel));
-            Ok(())
         }
         Command::PRIVMSG(channel, msg)
             if rstate.current_nick == channel && msg == "\x01VERSION\x01" =>
         {
             sendo
-                .send(SendMsg::Delayed(
-                    Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into(),
-                ))
-                .await
+                .send(Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into())
+                .await;
         }
         Command::PRIVMSG(channel, msg) => {
             if let Some(comm) = parse_moose_args(&msg) {
@@ -195,14 +189,14 @@ pub async fn handle(
                                     .await
                                     {
                                         Ok(lines) => {
-                                            let _ = lines.lines().try_for_each(|line| {
-                                                sendo.try_send(SendMsg::Delayed(
+                                            lines.lines().for_each(|line| {
+                                                sendo.lossy_send(
                                                     Command::PRIVMSG(
                                                         channel.clone(),
                                                         line.to_owned(),
                                                     )
                                                     .into(),
-                                                ))
+                                                )
                                             });
                                             sleep(Duration::from_secs(10)).await;
                                             return;
@@ -211,13 +205,14 @@ pub async fn handle(
                                     }
                                 }
                                 Err(_) => {
-                                    let _ = sendo.send(SendMsg::Delayed(
+                                    sendo.send_notify(
                                         Command::NOTICE(
                                             sender,
-                                            "Please wait awhile before asking for another moose.".to_owned(),
+                                            "Please wait awhile before asking for another moose."
+                                                .to_owned(),
                                         )
                                         .into(),
-                                    )).await;
+                                    );
                                     return;
                                 }
                             },
@@ -225,38 +220,21 @@ pub async fn handle(
                         }
                     }
                 };
-                sendo
-                    .send(SendMsg::Delayed(Command::PRIVMSG(channel, resp).into()))
-                    .await
-            } else {
-                Ok(())
+                sendo.send(Command::PRIVMSG(channel, resp).into()).await;
             }
         }
         Command::Numeric(num, _params) => match num {
             Numeric::RPL_WELCOME => {
                 if let Some(ref npass) = rstate.nickserv_pass {
-                    let _ = sendo
-                        .send(SendMsg::Immediate(
-                            Command::Raw(format!("NICKSERV IDENTIFY :{npass}")).into(),
-                        ))
+                    sendo
+                        .send_high_prio(Command::Raw(format!("NICKSERV IDENTIFY :{npass}")).into())
                         .await;
                 }
-                let mut joins = join_channels(&rstate.channels);
-                loop {
-                    if let Some(j) = joins.next() {
-                        if let Err(e) = sendo.send(SendMsg::Immediate(j.into())).await {
-                            break Err(e);
-                        }
-                    } else {
-                        break Ok(());
-                    }
-                }
+                join_channels(&rstate.channels).for_each(|m| sendo.lossy_send_high_prio(m.into()));
             }
             Numeric::ERR_ERRONEUSNICKNAME => {
                 eprintln!("ERR: [irc] Server does not like our nickname.");
-                sendo
-                    .send(SendMsg::Immediate(Command::QUIT(None).into()))
-                    .await
+                sendo.send_high_prio(Command::QUIT(None).into()).await;
             }
             Numeric::ERR_NICKNAMEINUSE => {
                 drop(rstate);
@@ -264,19 +242,15 @@ pub async fn handle(
                 wstate.current_nick.push_str(CONFLICT_FILLER);
                 if wstate.current_nick.len() - wstate.original_nick.len() > 3 {
                     eprintln!("ERR: [irc] Server asked us to rename ourselves too many times.");
-                    let _ = sendo
-                        .send(SendMsg::Immediate(Command::QUIT(None).into()))
-                        .await;
+                    sendo.send_high_prio(Command::QUIT(None).into()).await;
                     return;
                 }
                 sendo
-                    .send(SendMsg::Immediate(
-                        Command::NICK(wstate.current_nick.clone()).into(),
-                    ))
-                    .await
+                    .send_high_prio(Command::NICK(wstate.current_nick.clone()).into())
+                    .await;
             }
-            _ => Ok(()),
+            _ => (),
         },
-        _ => Ok(()),
+        _ => (),
     };
 }
