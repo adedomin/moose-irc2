@@ -23,7 +23,6 @@ use std::{
     time::Duration,
 };
 
-use rand::Rng;
 use serde::{de::DeserializeOwned, Deserialize};
 
 #[derive(Default, Deserialize, Clone)]
@@ -34,8 +33,12 @@ pub struct Config {
     #[serde(default)]
     pub tls: bool,
     pub nickserv: Option<String>,
+    #[serde(default, alias = "send-burst")]
+    pub send_burst: usize,
     #[serde(default, deserialize_with = "from_dur_str", alias = "send-delay")]
     pub send_delay: Duration,
+    #[serde(default, deserialize_with = "from_dur_str", alias = "moose-delay")]
+    pub moose_delay: Duration,
     #[serde(default = "default_moose_url", alias = "moose-url")]
     pub moose_url: String,
     #[serde(default)]
@@ -89,14 +92,22 @@ const EXAMPLE_CONFIG: &[u8] = br###"{ "nick": "MrMoose"
 , "host": "irc.rizon.net:6697"
 , "// pass": "you can append any field with // to comment it out."
 , "pass": "server pass, omit or leave empty."
+, "//": "uses NICKSERV IDENTIFY :PASSWORD"
 , "nickserv": "nickserv password."
 , "tls": true
 , "channels":
   [ "#moose-irc2"
   ]
+, "//": "how many messages we can send before being throttled."
+, "send-burst": 3
+, "//": "how long to refill one send token; see above."
 , "send-delay": "350ms"
+, "//": "time to delay before allowing another moose request."
+, "moose-delay": "10s"
 , "moose-url": "https://moose2.ghetty.space"
+, "//": "you can leave it undefined or blank to disable invites."
 , "invite-file": "file to persist invites"
+, "//": "some networks may ban you for certain texts that may be repeated in a moose name (Rizon)."
 , "disable-search": false
 }
 "###;
@@ -169,7 +180,7 @@ where
         .as_ref()
         .parent()
         .expect("Should be unreachable; is only None when PathBuf is an empty string.");
-    let r: u64 = rand::thread_rng().gen();
+    let r: u64 = rand::random();
     let tdir = tdir.join(format!(".invite.json.{:x}", r));
     let mut invite_tmp = fs::File::create(tdir.clone())?;
 

@@ -76,7 +76,7 @@ pub async fn get_irclines(client: &Client, url: &str, moose: &str) -> Result<Str
 
 // note this api should always succeed.
 pub async fn get_search(client: &Client, url: &str, query: &str) -> Result<String, ResolveError> {
-    Ok(client
+    let resp = client
         .get(format!(
             "{}/search?p=0&q={}",
             url,
@@ -97,5 +97,10 @@ pub async fn get_search(client: &Client, url: &str, query: &str) -> Result<Strin
                 (acc, false)
             }
         })
-        .0)
+        .0;
+    if resp.is_empty() {
+        Ok("Error: No results found.".to_owned())
+    } else {
+        Ok(resp)
+    }
 }

@@ -58,7 +58,7 @@ fn main() {
         let inviter = invite_task(i, recvi);
 
         let (sendshut, recvshut) = broadcast::channel::<()>(16);
-        let shutdown = shutdown_task(sendshut.clone());
+        let shutdown = shutdown_task(sendshut.clone(), sendi.clone());
 
         let (server, port) = config
             .host
@@ -73,7 +73,13 @@ fn main() {
         .expect("Expected to set up connection.")
         .split();
         let (sendo, recvo) = create_send_recv_pair();
-        let sender = sender_task(config.send_delay, sendm, recvo, sendshut.clone());
+        let sender = sender_task(
+            config.send_burst,
+            config.send_delay,
+            sendm,
+            recvo,
+            sendshut.clone(),
+        );
 
         let receiver = receiver_task(config, recvm, sendo, sendi, sendshut, recvshut);
         let _ = tokio::join!(sender, receiver, shutdown);

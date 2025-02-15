@@ -2,12 +2,8 @@ use std::time::Duration;
 
 use futures::{stream::SplitSink, SinkExt};
 use irc::{proto::Message, Codec, Connection};
+use leaky_bucket::RateLimiter;
 use tokio::{sync::mpsc, task::JoinHandle};
-
-pub enum SendMsg {
-    Immediate(Message),
-    Delayed(Message),
-}
 
 #[derive(Clone)]
 pub struct Sender {
@@ -63,6 +59,7 @@ pub fn create_send_recv_pair() -> (Sender, Receiver) {
 }
 
 pub fn sender_task(
+    send_burst: usize,
     send_delay: Duration,
     mut send: SplitSink<Connection<Codec>, Message>,
     recv: Receiver,
@@ -73,30 +70,31 @@ pub fn sender_task(
         mut low_prio,
         mut notify,
     } = recv;
+    let send_burst = if send_burst == 0 { 1 } else { send_burst };
     tokio::task::spawn(async move {
         let mut recv_shut = send_shut.subscribe();
-        let mut interval = if send_delay.is_zero() {
+        let interval = if send_delay.is_zero() {
             None
         } else {
-            let mut i = tokio::time::interval(send_delay);
-            i.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            Some(i)
+            let rl = RateLimiter::builder()
+                .fair(false)
+                .max(send_burst)
+                .initial(send_burst)
+                .interval(send_delay)
+                .refill(1)
+                .build();
+            Some(rl)
         };
         while let Some(msg) = tokio::select! {
-            m = high_prio.recv() => m.map(SendMsg::Immediate),
-            m = notify.recv() => m.map(SendMsg::Immediate),
-            m = low_prio.recv() => m.map(SendMsg::Delayed),
+            m = high_prio.recv() => m,
+            m = notify.recv() => m,
+            m = low_prio.recv() => m,
             _ = recv_shut.recv() => None,
         } {
-            let m = match (msg, interval.as_mut()) {
-                (SendMsg::Immediate(m), _) => m,
-                (SendMsg::Delayed(m), None) => m,
-                (SendMsg::Delayed(m), Some(i)) => {
-                    i.tick().await;
-                    m
-                }
-            };
-            if let Err(e) = send.send(m).await {
+            if let Some(i) = interval.as_ref() {
+                i.acquire_one().await;
+            }
+            if let Err(e) = send.send(msg).await {
                 eprintln!("ERR: [task/sender] IO error: {e}");
                 break;
             };

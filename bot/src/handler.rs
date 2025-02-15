@@ -1,10 +1,8 @@
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use irc::proto::{command::Numeric, Command, Message, Source, User};
-use tokio::{
-    sync::{mpsc::Sender, Mutex, RwLock},
-    time::sleep,
-};
+use leaky_bucket::RateLimiter;
+use tokio::sync::{mpsc::Sender, RwLock};
 
 use crate::{
     helpers::{join_channels, CONFLICT_FILLER},
@@ -13,7 +11,6 @@ use crate::{
 };
 
 const APP_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
-static MOOSE_OUTPUT_LOCK: Mutex<()> = Mutex::const_new(());
 
 pub struct IrcState {
     original_nick: String,
@@ -22,6 +19,7 @@ pub struct IrcState {
     channels: HashSet<String>,
     moose_url: String,
     moose_client: reqwest::Client,
+    moose_delay: Option<RateLimiter>,
 }
 
 impl IrcState {
@@ -30,7 +28,21 @@ impl IrcState {
         nickserv_pass: Option<String>,
         channels: HashSet<String>,
         moose_url: String,
+        moose_delay: Duration,
     ) -> Self {
+        let moose_delay = if moose_delay.is_zero() {
+            None
+        } else {
+            Some(
+                RateLimiter::builder()
+                    .fair(false)
+                    .max(1)
+                    .initial(1)
+                    .interval(moose_delay)
+                    .refill(1)
+                    .build(),
+            )
+        };
         let moose_client = reqwest::Client::builder()
             .user_agent(APP_NAME)
             .timeout(Duration::from_secs(5))
@@ -43,6 +55,7 @@ impl IrcState {
             channels,
             moose_url,
             moose_client,
+            moose_delay,
         }
     }
 }
@@ -115,6 +128,7 @@ pub async fn handle(
     let rstate = state.read().await;
     match msg.command {
         Command::PING(pong) => sendo.send_high_prio(Command::PONG(pong, None).into()).await,
+        // Command::PONG(pong, _) => eprintln!("DEBUG: [irc] recv PONG {pong}"),
         Command::ERROR(banned) => {
             eprintln!("ERR: [irc] Banned (?): {banned}");
             sendo.send_high_prio(Command::QUIT(None).into()).await
@@ -149,7 +163,9 @@ pub async fn handle(
             if rstate.current_nick == channel && msg == "\x01VERSION\x01" =>
         {
             sendo
-                .send(Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into())
+                .send_high_prio(
+                    Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into(),
+                )
                 .await;
         }
         Command::PRIVMSG(channel, msg) => {
@@ -179,33 +195,33 @@ pub async fn handle(
                     }
                     MComm::Irc(q) => {
                         match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
-                            Ok(moose) => match MOOSE_OUTPUT_LOCK.try_lock() {
-                                Ok(_) => {
-                                    match get_irclines(
-                                        &rstate.moose_client,
-                                        &rstate.moose_url,
-                                        &moose,
-                                    )
-                                    .await
-                                    {
-                                        Ok(lines) => {
-                                            lines.lines().for_each(|line| {
-                                                sendo.lossy_send(
-                                                    Command::PRIVMSG(
-                                                        channel.clone(),
-                                                        line.to_owned(),
+                            Ok(moose) => {
+                                match rstate.moose_delay.as_ref().map(|rl| rl.try_acquire(1)) {
+                                    Some(true) => {
+                                        match get_irclines(
+                                            &rstate.moose_client,
+                                            &rstate.moose_url,
+                                            &moose,
+                                        )
+                                        .await
+                                        {
+                                            Ok(lines) => {
+                                                lines.lines().for_each(|line| {
+                                                    sendo.lossy_send(
+                                                        Command::PRIVMSG(
+                                                            channel.clone(),
+                                                            line.to_owned(),
+                                                        )
+                                                        .into(),
                                                     )
-                                                    .into(),
-                                                )
-                                            });
-                                            sleep(Duration::from_secs(10)).await;
-                                            return;
+                                                });
+                                                return;
+                                            }
+                                            Err(e) => e.to_string(),
                                         }
-                                        Err(e) => e.to_string(),
                                     }
-                                }
-                                Err(_) => {
-                                    sendo.send_notify(
+                                    _ => {
+                                        sendo.send_notify(
                                         Command::NOTICE(
                                             sender,
                                             "Please wait awhile before asking for another moose."
@@ -213,14 +229,17 @@ pub async fn handle(
                                         )
                                         .into(),
                                     );
-                                    return;
+                                        return;
+                                    }
                                 }
-                            },
+                            }
                             Err(e) => e.to_string(),
                         }
                     }
                 };
-                sendo.send(Command::PRIVMSG(channel, resp).into()).await;
+                sendo
+                    .send_high_prio(Command::PRIVMSG(channel, resp).into())
+                    .await;
             }
         }
         Command::Numeric(num, _params) => match num {

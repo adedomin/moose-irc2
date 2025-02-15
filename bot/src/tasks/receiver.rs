@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::{stream::SplitStream, StreamExt};
-use irc::{Codec, Connection};
+use irc::{proto::Command, Codec, Connection};
 use tokio::{
     sync::{mpsc::Sender, RwLock, Semaphore},
     task::JoinHandle,
+    time,
 };
 
 use crate::{
@@ -15,6 +16,12 @@ use crate::{
 };
 
 use super::{invite::InviteMsg, sender};
+
+enum Recv<T> {
+    Normal(T),
+    Shutdown,
+    Timeout,
+}
 
 pub fn receiver_task(
     config: Config,
@@ -36,12 +43,30 @@ pub fn receiver_task(
             config.nickserv,
             config.channels,
             config.moose_url,
+            config.moose_delay,
         )));
         let task_limit = Arc::new(Semaphore::new(64));
-        while let Some(msg) = tokio::select! {
-            m = recv.next() => m,
-            _ = recv_shut.recv() => None,
-        } {
+        let mut double_timeout = false;
+        loop {
+            let msg = match tokio::select! {
+                    m = recv.next() => Recv::Normal(m),
+                    _ = recv_shut.recv() => Recv::Shutdown,
+                    _ = time::sleep(Duration::from_secs(60)) => Recv::Timeout,
+            } {
+                Recv::Normal(Some(m)) => m,
+                Recv::Normal(None) | Recv::Shutdown => break,
+                Recv::Timeout if double_timeout => {
+                    eprintln!("ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
+                    break;
+                }
+                Recv::Timeout => {
+                    // eprintln!("DEBUG: [task/receiver] Timeout; pinging IRC server.");
+                    double_timeout = true;
+                    sendo.send(Command::PING("PING".to_owned()).into()).await;
+                    continue;
+                }
+            };
+            double_timeout = false;
             match msg {
                 Ok(Ok(msg)) => {
                     tokio::spawn(capture_clone! {

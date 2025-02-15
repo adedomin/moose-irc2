@@ -11,6 +11,7 @@ use crate::config::save_invite;
 pub enum InviteMsg {
     Joined(String),
     Kicked(String),
+    Quit,
 }
 
 pub fn invite_task(
@@ -24,6 +25,7 @@ pub fn invite_task(
                 let changed = match invite {
                     InviteMsg::Joined(chan) => invites.insert(chan),
                     InviteMsg::Kicked(chan) => invites.remove(&chan),
+                    InviteMsg::Quit => break,
                 };
                 if changed {
                     if let Err(e) = save_invite(&ifile, &invites) {

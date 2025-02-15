@@ -35,6 +35,7 @@ pub struct Config<'a> {
 impl<Codec> Connection<Codec> {
     pub async fn new(config: Config<'_>, codec: Codec) -> Result<Self, Error> {
         let tcp = TcpStream::connect((config.server, config.port)).await?;
+        tcp.set_nodelay(true).unwrap();
 
         if let Security::Secured {
             root_cert_path,
