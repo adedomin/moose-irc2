@@ -4,7 +4,7 @@ Running
 =======
 
 ```sh
-moose-irc2 init -c /etc/moose-irc2/NETWORK_NAME.json
+moose-irc2 -c /etc/moose-irc2/NETWORK_NAME.json init
 # now edit /etc/moose-irc2/NETWORK_NAME.json
 # if you want invites, edit invite-file in the config.json
 # empty strings are the default "off" value(s)
