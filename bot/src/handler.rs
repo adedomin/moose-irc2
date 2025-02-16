@@ -246,7 +246,7 @@ pub async fn handle(
             Numeric::RPL_WELCOME => {
                 if let Some(ref npass) = rstate.nickserv_pass {
                     sendo
-                        .send_high_prio(Command::Raw(format!("NICKSERV IDENTIFY :{npass}")).into())
+                        .send_high_prio(Command::Raw(format!("NICKSERV IDENTIFY {npass}")).into())
                         .await;
                 }
                 join_channels(&rstate.channels).for_each(|m| sendo.lossy_send_high_prio(m.into()));
@@ -255,7 +255,8 @@ pub async fn handle(
                 eprintln!("ERR: [irc] Server does not like our nickname.");
                 sendo.send_high_prio(Command::QUIT(None).into()).await;
             }
-            Numeric::ERR_NICKNAMEINUSE => {
+            Numeric::ERR_NICKNAMEINUSE | Numeric::ERR_NICKCOLLISION => {
+                eprintln!("WARN: [irc] Server claims we have a name conflict.");
                 drop(rstate);
                 let mut wstate = state.write().await;
                 wstate.current_nick.push_str(CONFLICT_FILLER);

@@ -203,7 +203,6 @@ pub fn parse_args() -> (Config, Option<HashSet<String>>) {
             exit(1);
         }
         SubCommand::Run => {
-            let mut invites = None;
             let mut config = open_path_and_deserialize::<_, Config>(args.config)
                 .map_err(|e| {
                     eprintln!("Failed to open configuration: {e}");
@@ -213,7 +212,7 @@ pub fn parse_args() -> (Config, Option<HashSet<String>>) {
             if let Some(invite_file) = args.invites {
                 config.invite_file = Some(invite_file)
             };
-            match config.invite_file {
+            let invites = match config.invite_file {
                 Some(ref invite) if invite.parent().is_some() => {
                     let invites_list = open_path_and_deserialize::<_, HashSet<String>>(invite)
                         .or_else(|e| match e.kind() {
@@ -222,12 +221,12 @@ pub fn parse_args() -> (Config, Option<HashSet<String>>) {
                         })
                         .expect("Could not open invite file.");
                     config.channels.extend(invites_list.clone());
-                    invites = Some(invites_list.clone());
+                    Some(invites_list)
                 }
                 // if parent is none, the path is invalid junk => "" or "/"
-                Some(_) => config.invite_file = None,
-                None => config.invite_file = None,
-            }
+                Some(_) => None,
+                None => None,
+            };
             (config, invites)
         }
     }

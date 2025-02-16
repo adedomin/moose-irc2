@@ -17,12 +17,6 @@ use crate::{
 
 use super::{invite::InviteMsg, sender};
 
-enum Recv<T> {
-    Normal(T),
-    Shutdown,
-    Timeout,
-}
-
 pub fn receiver_task(
     config: Config,
     mut recv: SplitStream<Connection<Codec>>,
@@ -47,25 +41,20 @@ pub fn receiver_task(
         )));
         let task_limit = Arc::new(Semaphore::new(64));
         let mut double_timeout = false;
-        loop {
-            let msg = match tokio::select! {
-                    m = recv.next() => Recv::Normal(m),
-                    _ = recv_shut.recv() => Recv::Shutdown,
-                    _ = time::sleep(Duration::from_secs(60)) => Recv::Timeout,
-            } {
-                Recv::Normal(Some(m)) => m,
-                Recv::Normal(None) | Recv::Shutdown => break,
-                Recv::Timeout if double_timeout => {
-                    eprintln!("ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
-                    break;
-                }
-                Recv::Timeout => {
-                    // eprintln!("DEBUG: [task/receiver] Timeout; pinging IRC server.");
-                    double_timeout = true;
-                    sendo.send(Command::PING("PING".to_owned()).into()).await;
-                    continue;
-                }
-            };
+        'l: while let Some(msg) = tokio::select! {
+                m = recv.next() => m,
+                _ = recv_shut.recv() => None,
+                _ = time::sleep(Duration::from_secs(60)) => {
+                    if double_timeout {
+                        eprintln!("ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
+                        None
+                    } else {
+                        double_timeout = true;
+                        sendo.send(Command::PING("PING".to_owned()).into()).await;
+                        continue 'l;
+                    }
+                },
+        } {
             double_timeout = false;
             match msg {
                 Ok(Ok(msg)) => {
