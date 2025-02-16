@@ -3,6 +3,7 @@ name = "irc_proto"
 authors = ["Casper Rogild Storm", "Cory Forsstrom"]
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 itertools = "0.12.1"
