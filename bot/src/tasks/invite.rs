@@ -6,8 +6,9 @@ use std::{
 
 use tokio::sync::mpsc::Receiver;
 
-use crate::config::save_invite;
+use crate::{config::save_invite, debug};
 
+#[derive(Debug)]
 pub enum InviteMsg {
     Joined(String),
     Kicked(String),
@@ -22,11 +23,13 @@ pub fn invite_task(
     thread::spawn(move || {
         if let Some((mut invites, ifile)) = invites {
             while let Some(invite) = recv.blocking_recv() {
+                debug!("DEBUG: m{invite:?} - invited:{invites:?}");
                 let changed = match invite {
                     InviteMsg::Joined(chan) => invites.insert(chan),
                     InviteMsg::Kicked(chan) => invites.remove(&chan),
                     InviteMsg::Quit => break,
                 };
+                debug!("DEBUG: changed:{changed} - invited:{invites:?}");
                 if changed {
                     if let Err(e) = save_invite(&ifile, &invites) {
                         eprintln!("WARN: Failed to save invite changes: {e}");

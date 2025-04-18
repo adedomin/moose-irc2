@@ -11,7 +11,7 @@ use tokio::{
 use crate::{
     capture_clone,
     config::Config,
-    handler::{self, IrcState},
+    handlers::{handler, ircstate::IrcState},
     helpers::irc_preamble,
 };
 
@@ -28,9 +28,7 @@ pub fn receiver_task(
     tokio::task::spawn(async move {
         let pass = config.pass.clone().unwrap_or_default();
         let pream = irc_preamble(config.nick.as_str(), pass.as_str());
-        pream
-            .into_iter()
-            .for_each(|m| sendo.lossy_send_high_prio(m));
+        pream.into_iter().for_each(|m| sendo.lossy_send(m));
 
         let irc_state = Arc::new(RwLock::new(IrcState::new(
             config.nick,
@@ -61,17 +59,25 @@ pub fn receiver_task(
                     tokio::spawn(capture_clone! {
                         (irc_state, sendo, sendi, task_limit)
                         async move {
-                            if task_limit.try_acquire().is_ok() {
+                            if let Ok(s) = task_limit.try_acquire() {
                                 handler::handle(irc_state, msg, config.disable_search, sendo, sendi).await;
+                                drop(s)
                             } else {
                                 eprintln!("WARN: [irc] Too many tasks; dropping messages.");
                             }
                         }
                     });
                 }
-                Ok(Err(e)) => {
-                    eprintln!("WARN: [task/receiver] Invalid IRC line: {e}");
-                }
+                Ok(Err(e)) => match e {
+                    irc::proto::parse::Error::Parse { input, nom } => {
+                        eprintln!("WARN: [task/receiver] IRC Parse error: {input} / {nom}");
+                    }
+                    irc::proto::parse::Error::InvalidUtf8(e) => {
+                        let b = e.into_bytes();
+                        let line = String::from_utf8_lossy(&b);
+                        eprintln!("WARN: [task/receiver] Received invalid utf8 (may need to consider alternatives): {line}");
+                    }
+                },
                 Err(e) => {
                     eprintln!("ERR: [tast/receiver] Stream error: {e}");
                     break;

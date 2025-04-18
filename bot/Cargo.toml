@@ -20,3 +20,4 @@ tokio = { version = "1", default-features = false, features = ["rt", "net", "mac
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 thiserror = "2"
 webpki-roots = "0.26.7"
+pin-project = "1"

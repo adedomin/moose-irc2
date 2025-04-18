@@ -28,10 +28,9 @@ use tasks::{
 use tokio::sync::{broadcast, mpsc};
 
 mod config;
-mod handler;
+mod handlers;
 mod helpers;
 mod tasks;
-mod tls;
 mod webreq;
 
 fn default_port(tls: bool) -> u16 {

@@ -103,3 +103,13 @@ macro_rules! capture_clone {
         }
     };
 }
+
+#[macro_export]
+macro_rules! debug {
+    ($($args:tt)*) => {
+        #[cfg(debug_assertions)]
+        {
+            println!($($args)+)
+        }
+    };
+}

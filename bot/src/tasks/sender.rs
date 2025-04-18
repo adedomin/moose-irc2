@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{future::Future, pin::pin, task::Poll, time::Duration};
 
 use futures::{stream::SplitSink, SinkExt};
 use irc::{proto::Message, Codec, Connection};
@@ -7,53 +7,64 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 #[derive(Clone)]
 pub struct Sender {
-    high_prio: mpsc::Sender<Message>,
-    low_prio: mpsc::Sender<Message>,
-    notify: mpsc::Sender<Message>,
+    msg: mpsc::Sender<Message>,
+    moose: mpsc::Sender<Message>,
 }
 
 impl Sender {
     pub async fn send(&self, m: Message) {
-        let _ = self.low_prio.send(m).await;
+        let _ = self.msg.send(m).await;
     }
 
     pub fn lossy_send(&self, m: Message) {
-        let _ = self.low_prio.try_send(m);
+        let _ = self.msg.try_send(m);
     }
 
-    pub async fn send_high_prio(&self, m: Message) {
-        let _ = self.high_prio.send(m).await;
-    }
-
-    pub fn lossy_send_high_prio(&self, m: Message) {
-        let _ = self.high_prio.try_send(m);
-    }
-
-    pub fn send_notify(&self, m: Message) {
-        let _ = self.notify.try_send(m);
+    pub fn send_moose(&self, m: Message) {
+        let _ = self.moose.try_send(m);
     }
 }
 
+#[pin_project::pin_project]
 pub struct Receiver {
-    high_prio: mpsc::Receiver<Message>,
-    low_prio: mpsc::Receiver<Message>,
-    notify: mpsc::Receiver<Message>,
+    #[pin]
+    msg: mpsc::Receiver<Message>,
+    #[pin]
+    moose: mpsc::Receiver<Message>,
+}
+
+impl Future for Receiver {
+    type Output = Option<Message>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let mut this = self.project();
+
+        let fut = if (rand::random::<u32>() & 1) == 1 {
+            [&mut this.msg, &mut this.moose]
+        } else {
+            [&mut this.moose, &mut this.msg]
+        };
+        for f in fut {
+            let p = f.poll_recv(cx);
+            if p.is_ready() {
+                return p;
+            }
+        }
+        Poll::Pending
+    }
 }
 
 pub fn create_send_recv_pair() -> (Sender, Receiver) {
-    let (high_prio, high_prior) = mpsc::channel(64);
-    let (low_prio, low_prior) = mpsc::channel(64);
-    let (notify, notifyr) = mpsc::channel(1);
+    let (msg, msg_r) = mpsc::channel(64);
+    let (moose, moose_r) = mpsc::channel(64);
     (
-        Sender {
-            high_prio,
-            low_prio,
-            notify,
-        },
+        Sender { msg, moose },
         Receiver {
-            high_prio: high_prior,
-            low_prio: low_prior,
-            notify: notifyr,
+            msg: msg_r,
+            moose: moose_r,
         },
     )
 }
@@ -65,11 +76,6 @@ pub fn sender_task(
     recv: Receiver,
     send_shut: tokio::sync::broadcast::Sender<()>,
 ) -> JoinHandle<()> {
-    let Receiver {
-        mut high_prio,
-        mut low_prio,
-        mut notify,
-    } = recv;
     let send_burst = if send_burst == 0 { 1 } else { send_burst };
     tokio::task::spawn(async move {
         let mut recv_shut = send_shut.subscribe();
@@ -85,10 +91,9 @@ pub fn sender_task(
                 .build();
             Some(rl)
         };
+        let mut recv = pin!(recv);
         while let Some(msg) = tokio::select! {
-            m = high_prio.recv() => m,
-            m = notify.recv() => m,
-            m = low_prio.recv() => m,
+            m = &mut recv => m,
             _ = recv_shut.recv() => None,
         } {
             if let Some(i) = interval.as_ref() {
