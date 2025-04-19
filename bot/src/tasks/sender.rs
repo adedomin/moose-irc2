@@ -1,4 +1,4 @@
-use std::{future::Future, pin::pin, task::Poll, time::Duration};
+use std::time::Duration;
 
 use futures::{stream::SplitSink, SinkExt};
 use irc::{proto::Message, Codec, Connection};
@@ -25,36 +25,9 @@ impl Sender {
     }
 }
 
-#[pin_project::pin_project]
 pub struct Receiver {
-    #[pin]
     msg: mpsc::Receiver<Message>,
-    #[pin]
     moose: mpsc::Receiver<Message>,
-}
-
-impl Future for Receiver {
-    type Output = Option<Message>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let mut this = self.project();
-
-        let fut = if (rand::random::<u32>() & 1) == 1 {
-            [&mut this.msg, &mut this.moose]
-        } else {
-            [&mut this.moose, &mut this.msg]
-        };
-        for f in fut {
-            let p = f.poll_recv(cx);
-            if p.is_ready() {
-                return p;
-            }
-        }
-        Poll::Pending
-    }
 }
 
 pub fn create_send_recv_pair() -> (Sender, Receiver) {
@@ -91,9 +64,10 @@ pub fn sender_task(
                 .build();
             Some(rl)
         };
-        let mut recv = pin!(recv);
+        let Receiver { mut msg, mut moose } = recv;
         while let Some(msg) = tokio::select! {
-            m = &mut recv => m,
+            m = msg.recv() => m,
+            m = moose.recv() => m,
             _ = recv_shut.recv() => None,
         } {
             if let Some(i) = interval.as_ref() {
