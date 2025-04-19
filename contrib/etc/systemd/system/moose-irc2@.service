@@ -11,4 +11,4 @@ Restart=always
 RestartSec=1min
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=moose-irc2.service
