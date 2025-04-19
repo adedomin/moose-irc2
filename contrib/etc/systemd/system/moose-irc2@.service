@@ -1,11 +1,13 @@
 [Unit]
 Description=Moose2 IRC Bot
-After=moose2.service
+PartOf=moose-irc2.service
+ReloadPropagatedFrom=moose-irc2.service
 
 [Service]
 User=moose
+Type=simple
 ExecStart=/usr/local/bin/moose-irc2 -c /etc/moose-irc2/%i.json
-Restart=on-failure
+Restart=always
 RestartSec=1min
 
 [Install]

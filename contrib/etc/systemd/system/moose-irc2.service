@@ -1,0 +1,15 @@
+[Unit]
+Description=moose-irc2 pseudo target.
+After=network.target
+After=moose2.service
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+# TODO: Add reload logic?
+# ExecReload=/bin/true
+
+[Install]
+WantedBy=default.target
