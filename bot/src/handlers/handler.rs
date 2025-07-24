@@ -65,7 +65,7 @@ pub async fn handle(
             if rstate.current_nick == channel && msg == "\x01VERSION\x01" =>
         {
             sendo
-                .send(Command::NOTICE(sender, format!("\x01VERSION {}\x01", APP_NAME)).into())
+                .send(Command::NOTICE(sender, format!("\x01VERSION {APP_NAME}\x01")).into())
                 .await;
         }
         Command::PRIVMSG(channel, msg) => {

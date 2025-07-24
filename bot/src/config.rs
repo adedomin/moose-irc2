@@ -181,7 +181,7 @@ where
         .parent()
         .expect("Should be unreachable; is only None when PathBuf is an empty string.");
     let r: u64 = rand::random();
-    let tdir = tdir.join(format!(".invite.json.{:x}", r));
+    let tdir = tdir.join(format!(".invite.json.{r:x}"));
     let mut invite_tmp = fs::File::create(tdir.clone())?;
 
     invite_tmp.write_all(

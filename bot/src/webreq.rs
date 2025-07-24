@@ -49,8 +49,7 @@ pub async fn resolve_moosename(
 ) -> Result<String, ResolveError> {
     let res = client
         .get(format!(
-            "{}/api-helper/resolve/{}",
-            url,
+            "{url}/api-helper/resolve/{}",
             urlencode(moose.as_bytes()),
         ))
         .send()
@@ -66,7 +65,7 @@ pub async fn resolve_moosename(
 }
 
 pub async fn get_irclines(client: &Client, url: &str, moose: &str) -> Result<String, ResolveError> {
-    let res = client.get(format!("{}/irc/{}", url, moose)).send().await?;
+    let res = client.get(format!("{url}/irc/{moose}")).send().await?;
     if res.status().is_success() {
         Ok(res.text().await?)
     } else {
@@ -78,8 +77,7 @@ pub async fn get_irclines(client: &Client, url: &str, moose: &str) -> Result<Str
 pub async fn get_search(client: &Client, url: &str, query: &str) -> Result<String, ResolveError> {
     let resp = client
         .get(format!(
-            "{}/search?p=0&q={}",
-            url,
+            "{url}/search?p=0&q={}",
             urlencode(query.as_bytes())
         ))
         .send()
