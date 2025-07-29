@@ -2,6 +2,9 @@
 Description=Moose2 IRC Bot
 PartOf=moose-irc2.service
 ReloadPropagatedFrom=moose-irc2.service
+After=network-online.target
+Wants=network-online.target
+After=moose2.service
 
 [Service]
 User=moose

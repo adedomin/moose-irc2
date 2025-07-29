@@ -1,8 +1,5 @@
 [Unit]
 Description=moose-irc2 pseudo target.
-After=network.target
-After=moose2.service
-Wants=network.target
 
 [Service]
 Type=oneshot
