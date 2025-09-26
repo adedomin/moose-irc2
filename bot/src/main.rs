@@ -25,7 +25,8 @@ use tasks::{
     sender::{create_send_recv_pair, sender_task},
     shutdown::shutdown_task,
 };
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 mod config;
 mod handlers;
@@ -56,8 +57,8 @@ fn main() {
         };
         let inviter = invite_task(i, recvi);
 
-        let (sendshut, recvshut) = broadcast::channel::<()>(16);
-        let shutdown = shutdown_task(sendshut.clone(), sendi.clone());
+        let stop_token = CancellationToken::new();
+        let shutdown = shutdown_task(stop_token.clone(), sendi.clone());
 
         let (server, port) = config
             .host
@@ -77,10 +78,10 @@ fn main() {
             config.send_delay,
             sendm,
             recvo,
-            sendshut.clone(),
+            stop_token.clone(),
         );
 
-        let receiver = receiver_task(config, recvm, sendo, sendi, sendshut, recvshut);
+        let receiver = receiver_task(config, recvm, sendo, sendi, stop_token);
         let _ = tokio::join!(sender, receiver, shutdown);
         let _ = inviter.join();
     });

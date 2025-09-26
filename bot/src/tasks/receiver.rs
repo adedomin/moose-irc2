@@ -7,6 +7,7 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     capture_clone,
@@ -22,8 +23,7 @@ pub fn receiver_task(
     mut recv: SplitStream<Connection<Codec>>,
     sendo: sender::Sender,
     sendi: Sender<InviteMsg>,
-    send_shut: tokio::sync::broadcast::Sender<()>,
-    mut recv_shut: tokio::sync::broadcast::Receiver<()>,
+    stop_token: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::task::spawn(async move {
         let pass = config.pass.clone().unwrap_or_default();
@@ -41,14 +41,16 @@ pub fn receiver_task(
         let mut double_timeout = false;
         'l: while let Some(msg) = tokio::select! {
                 m = recv.next() => m,
-                _ = recv_shut.recv() => None,
+                _ = stop_token.cancelled() => None,
                 _ = time::sleep(Duration::from_secs(60)) => {
                     if double_timeout {
-                        eprintln!("ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
+                        eprintln!(" ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
                         None
                     } else {
                         double_timeout = true;
-                        sendo.send(Command::PING("PING".to_owned()).into()).await;
+                        // See if we're still connected.
+                        // if our send channel is full, something is really wrong.
+                        sendo.lossy_send(Command::PING("PING".to_owned()).into());
                         continue 'l;
                     }
                 },
@@ -84,7 +86,7 @@ pub fn receiver_task(
                 }
             }
         }
-        let _ = send_shut.send(());
+        stop_token.cancel();
         eprintln!("INFO: [task/receiver] Shutting down.")
     })
 }

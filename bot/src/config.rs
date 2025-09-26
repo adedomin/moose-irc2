@@ -154,14 +154,6 @@ where
     println!("Configuration created: Edit the file and restart the application.");
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum DeserErr {
-    #[error(transparent)]
-    Io(#[from] io::Error),
-    #[error(transparent)]
-    Deserialize(#[from] serde_json::Error),
-}
-
 fn open_path_and_deserialize<P, D>(path: P) -> Result<D, io::Error>
 where
     P: std::fmt::Debug + AsRef<Path>,

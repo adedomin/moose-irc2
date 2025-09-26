@@ -4,6 +4,7 @@ use futures::{stream::SplitSink, SinkExt};
 use irc::{proto::Message, Codec, Connection};
 use leaky_bucket::RateLimiter;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct Sender {
@@ -47,11 +48,10 @@ pub fn sender_task(
     send_delay: Duration,
     mut send: SplitSink<Connection<Codec>, Message>,
     recv: Receiver,
-    send_shut: tokio::sync::broadcast::Sender<()>,
+    stop_token: CancellationToken,
 ) -> JoinHandle<()> {
     let send_burst = if send_burst == 0 { 1 } else { send_burst };
     tokio::task::spawn(async move {
-        let mut recv_shut = send_shut.subscribe();
         let interval = if send_delay.is_zero() {
             None
         } else {
@@ -68,7 +68,7 @@ pub fn sender_task(
         while let Some(msg) = tokio::select! {
             m = msg.recv() => m,
             m = moose.recv() => m,
-            _ = recv_shut.recv() => None,
+            _ = stop_token.cancelled() => None,
         } {
             if let Some(i) = interval.as_ref() {
                 i.acquire_one().await;
@@ -78,7 +78,7 @@ pub fn sender_task(
                 break;
             };
         }
-        let _ = send_shut.send(());
+        stop_token.cancel();
         eprintln!("INFO: [task/sender] Shutting down.");
     })
 }

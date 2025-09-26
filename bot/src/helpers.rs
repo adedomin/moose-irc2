@@ -60,7 +60,7 @@ fn security<'a>(tls: bool) -> irc::connection::Security<'a> {
     }
 }
 
-pub fn client_config(server: &str, port: u16, tls: bool) -> irc::connection::Config {
+pub fn client_config(server: &'_ str, port: u16, tls: bool) -> irc::connection::Config<'_> {
     irc::connection::Config {
         server,
         port,
