@@ -47,6 +47,10 @@ pub fn receiver_task(
                         eprintln!(" ERR: [task/receiver] TCP Connection is likely half open or the IRC server is broken.");
                         None
                     } else {
+                        #[cfg(debug_assertions)]
+                        {
+                            eprintln!("DEBG: [task/receiver] Have not heard from server in 60 seconds; Sending PING.");
+                        }
                         double_timeout = true;
                         // See if we're still connected.
                         // if our send channel is full, something is really wrong.
