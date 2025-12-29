@@ -12,7 +12,6 @@ mod tls;
 pub enum Connection<Codec> {
     Tls(Framed<TlsStream<TcpStream>, Codec>),
     Unsecured(Framed<TcpStream, Codec>),
-    // Stdio(Framed<io::Join<io::Stdin, io::Stdout>, Codec>),
 }
 
 #[derive(Debug, Clone)]

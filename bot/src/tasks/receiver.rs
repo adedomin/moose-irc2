@@ -78,11 +78,6 @@ pub fn receiver_task(
                     irc::proto::parse::Error::Parse { input, nom } => {
                         eprintln!("WARN: [task/receiver] IRC Parse error: {input} / {nom}");
                     }
-                    irc::proto::parse::Error::InvalidUtf8(e) => {
-                        let b = e.into_bytes();
-                        let line = String::from_utf8_lossy(&b);
-                        eprintln!("WARN: [task/receiver] Received invalid utf8 (may need to consider alternatives): {line}");
-                    }
                 },
                 Err(e) => {
                     eprintln!("ERR: [tast/receiver] Stream error: {e}");
