@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use irc::proto::{command::Numeric, Command, Message, Source, User};
-use tokio::sync::{mpsc::Sender, RwLock};
+use irc::proto::{Command, Message, Source, User, command::Numeric};
+use tokio::sync::{RwLock, mpsc::Sender};
 
 use crate::{
     debug,
-    helpers::{join_channels, CONFLICT_FILLER},
+    helpers::{CONFLICT_FILLER, join_channels},
     tasks::{invite::InviteMsg, sender},
     webreq::{get_irclines, get_search, resolve_moosename},
 };
 
 use super::{
-    ircstate::{IrcState, APP_NAME},
-    moosecmd::{parse_moose_args, MComm, HELP_RESP},
+    ircstate::{APP_NAME, IrcState},
+    moosecmd::{HELP_RESP, MComm, parse_moose_args},
 };
 
 pub async fn handle(
@@ -30,8 +30,8 @@ pub async fn handle(
     let rstate = state.read().await;
     match msg.command {
         Command::PING(pong) => sendo.send(Command::PONG(pong, None).into()).await,
-        Command::PONG(pong, _) => {
-            debug!("DEBUG: [irc] recv PONG {pong}")
+        Command::PONG(_pong, _) => {
+            debug!("DEBUG: [irc] recv PONG {_pong}")
         }
         Command::ERROR(banned) => {
             eprintln!("ERR: [irc] Banned (?): {banned}");

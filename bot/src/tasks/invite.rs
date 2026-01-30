@@ -30,10 +30,8 @@ pub fn invite_task(
                     InviteMsg::Quit => break,
                 };
                 debug!("DEBUG: changed:{changed} - invited:{invites:?}");
-                if changed {
-                    if let Err(e) = save_invite(&ifile, &invites) {
-                        eprintln!("WARN: Failed to save invite changes: {e}");
-                    }
+                if changed && let Err(e) = save_invite(&ifile, &invites) {
+                    eprintln!("WARN: Failed to save invite changes: {e}");
                 }
             }
         }
