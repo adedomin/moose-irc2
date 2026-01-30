@@ -23,7 +23,7 @@ use std::{
     time::Duration,
 };
 
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 
 #[derive(Default, Deserialize, Clone)]
 pub struct Config {
@@ -135,7 +135,7 @@ pub enum SubCommand {
     Run,
 }
 
-fn create_parent_dirs<T: AsRef<Path>>(path: T) -> io::Result<()> {
+fn create_parent_dirs<P: AsRef<Path>>(path: P) -> io::Result<()> {
     if let Some(parent) = path.as_ref().parent() {
         fs::create_dir_all(parent)
     } else {
@@ -143,9 +143,9 @@ fn create_parent_dirs<T: AsRef<Path>>(path: T) -> io::Result<()> {
     }
 }
 
-fn write_default<T>(config_path: T)
+fn write_default<P>(config_path: P)
 where
-    T: std::fmt::Debug + AsRef<Path>,
+    P: std::fmt::Debug + AsRef<Path>,
 {
     println!("Creating example configuration at: {:?}", &config_path);
     create_parent_dirs(&config_path).unwrap();
@@ -156,7 +156,7 @@ where
 
 fn open_path_and_deserialize<P, D>(path: P) -> Result<D, io::Error>
 where
-    P: std::fmt::Debug + AsRef<Path>,
+    P: AsRef<Path>,
     D: DeserializeOwned,
 {
     let file = fs::File::open(&path)?;
@@ -204,20 +204,22 @@ pub fn parse_args() -> (Config, Option<HashSet<String>>) {
             if let Some(invite_file) = args.invites {
                 config.invite_file = Some(invite_file)
             };
-            let invites = match config.invite_file {
-                Some(ref invite) if invite.parent().is_some() => {
-                    let invites_list = open_path_and_deserialize::<_, HashSet<String>>(invite)
-                        .or_else(|e| match e.kind() {
-                            io::ErrorKind::NotFound => Ok(HashSet::from([])),
-                            _ => Err(e),
-                        })
-                        .expect("Could not open invite file.");
-                    config.channels.extend(invites_list.clone());
-                    Some(invites_list)
-                }
-                // if parent is none, the path is invalid junk => "" or "/"
-                Some(_) => None,
-                None => None,
+            let invites = if let Some(invite) = &config.invite_file
+                && let Some(parent) = invite.parent()
+            {
+                let invites_list = open_path_and_deserialize::<_, HashSet<String>>(invite)
+                    .or_else(|e| match e.kind() {
+                        io::ErrorKind::NotFound => {
+                            fs::create_dir_all(parent)?;
+                            Ok(HashSet::from([]))
+                        }
+                        _ => Err(e),
+                    })
+                    .expect("Could not open invite file.");
+                config.channels.extend(invites_list.clone());
+                Some(invites_list)
+            } else {
+                None
             };
             (config, invites)
         }

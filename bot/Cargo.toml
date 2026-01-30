@@ -1,7 +1,7 @@
 [package]
 name = "moose-irc2"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "IRC Bot for Moose2."
 authors = ["Anthony DeDominic"]
 license = "GPL-3.0-or-later"
