@@ -18,4 +18,5 @@ serde_json = "1"
 leaky-bucket = "1.1.2"
 tokio = { version = "1", default-features = false, features = ["rt", "net", "macros", "io-util", "fs", "signal"] }
 tokio-util = { version = "0.7", features = [] } 
+tokio-stream =  { version = "0.1.18", default-features = false, features = [] }
 thiserror = "2"

@@ -35,11 +35,7 @@ mod tasks;
 mod webreq;
 
 fn default_port(tls: bool) -> u16 {
-    if tls {
-        6697
-    } else {
-        6667
-    }
+    if tls { 6697 } else { 6667 }
 }
 
 fn main() {

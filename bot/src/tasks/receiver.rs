@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::{stream::SplitStream, StreamExt};
-use irc::{proto::Command, Codec, Connection};
+use futures::{StreamExt, stream::SplitStream};
+use irc::{Codec, Connection, proto::Command};
 use tokio::{
-    sync::{mpsc::Sender, RwLock, Semaphore},
+    sync::{RwLock, Semaphore, mpsc::Sender},
     task::JoinHandle,
     time,
 };

@@ -26,10 +26,17 @@ enum PComm {
     Irc,
 }
 
+fn ws(c: char) -> bool {
+    c.is_ascii_whitespace()
+}
+
 pub fn parse_moose_args(msg: &str) -> Option<MComm> {
     // we need any whitespace.
-    let mut iter = msg.split(|c: char| c.is_ascii_whitespace());
-    let comm = match iter.next()? {
+    let (comm, rest) = match msg.split_once(ws) {
+        Some(cr) => cr,
+        None => (msg, ""),
+    };
+    let comm = match comm {
         ".moose" | "!moose" | "moose" | ".mooseme" | "!mooseme" | "mooseme" => PComm::Irc,
         ".mooseimg" | "!mooseimg" | "mooseimg" => PComm::Image,
         ".moosesearch" | "!moosesearch" | "moosesearch" => PComm::Search,
@@ -37,16 +44,25 @@ pub fn parse_moose_args(msg: &str) -> Option<MComm> {
         ".help" | "!help" => return Some(MComm::Help),
         _ => return None,
     };
-    let arg = iter.next().unwrap_or("random");
-    let rest = iter.collect::<Vec<&str>>().join(" ");
+    let rest = rest.trim();
+    let (arg, r) = if rest.is_empty() {
+        ("--random", "")
+    } else {
+        match rest.split_once(ws) {
+            Some((a, r)) => (a, r.trim_start()),
+            None => (rest, ""),
+        }
+    };
+
     match arg {
-        "" | "--" => Some((comm, rest.as_str()).into()),
+        "--" if !r.is_empty() => Some((comm, r).into()),
+        "--" => Some((comm, rest).into()),
         "-h" | "--help" => Some(MComm::Help),
-        "-s" | "--search" => Some((PComm::Search, rest.as_str()).into()),
-        "-i" | "--image" => Some((PComm::Image, rest.as_str()).into()),
+        "-s" | "--search" => Some((PComm::Search, r).into()),
+        "-i" | "--image" => Some((PComm::Image, r).into()),
         "-r" | "--random" => Some((comm, "random").into()),
         "-l" | "--latest" => Some((comm, "latest").into()),
         "-o" | "--oldest" => Some((comm, "oldest").into()),
-        _ => Some((comm, [arg, &rest].join(" ").as_str()).into()),
+        _ => Some((comm, rest).into()),
     }
 }
