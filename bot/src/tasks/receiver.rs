@@ -26,6 +26,7 @@ pub fn receiver_task(
     stop_token: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::task::spawn(async move {
+        let _dropg = stop_token.drop_guard_ref();
         let pass = config.pass.clone().unwrap_or_default();
         let pream = irc_preamble(config.nick.as_str(), pass.as_str());
         pream.into_iter().for_each(|m| sendo.lossy_send(m));
@@ -85,7 +86,6 @@ pub fn receiver_task(
                 }
             }
         }
-        stop_token.cancel();
         eprintln!("INFO: [task/receiver] Shutting down.")
     })
 }

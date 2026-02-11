@@ -1,5 +1,5 @@
 use tokio::{
-    signal::unix::{signal, SignalKind},
+    signal::unix::{SignalKind, signal},
     sync::mpsc,
     task::JoinHandle,
 };
@@ -12,6 +12,7 @@ pub fn shutdown_task(
     send_invite: mpsc::Sender<InviteMsg>,
 ) -> JoinHandle<()> {
     tokio::task::spawn(async move {
+        let _dropg = stop_token.drop_guard_ref();
         let mut sigterm = signal(SignalKind::terminate()).unwrap();
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
@@ -24,7 +25,6 @@ pub fn shutdown_task(
                 eprintln!("WARN: [task/shutdown] SHUTDOWN: Shutting down.");
             }
         }
-        stop_token.cancel();
         // Sometimes the invite task will permanently block on blocking_recv().
         // This will make sure the invite task gets an explicit quit message so it shuts down.
         let _ = send_invite.send(InviteMsg::Quit).await;

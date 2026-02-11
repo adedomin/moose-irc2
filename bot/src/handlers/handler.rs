@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use governor::clock::Clock as _;
 use irc::proto::{Command, Message, Source, User, command::Numeric};
 use tokio::sync::{RwLock, mpsc::Sender};
 
@@ -122,13 +121,12 @@ pub async fn handle(
                                             Err(e) => e.to_string(),
                                         }
                                     }
-                                    Err(not_until) => {
-                                        let start = rstate.moose_delay.clock().now();
-                                        let retry_after = not_until.wait_time_from(start).as_secs();
+                                    Err(retry_after) => {
+                                        let plural = if retry_after != 1 { "s" } else { "" };
                                         sendo.lossy_send(
                                             Command::NOTICE(
                                                 sender,
-                                                format!("Please wait ~{retry_after} second(s) before asking for another moose."),
+                                                format!("Please wait ~{retry_after} second{plural} before asking for another moose."),
                                             )
                                             .into(),
                                         );

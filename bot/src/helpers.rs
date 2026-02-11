@@ -7,7 +7,7 @@ pub const CONFLICT_FILLER: &str = "_";
 pub fn irc_preamble(nick: &str, pass: &str) -> Vec<Message> {
     let mut preamble: Vec<Message> = vec![
         Command::NICK(nick.to_owned()).into(),
-        Command::USER(nick.to_owned(), "moose-irc2".to_owned()).into(),
+        Command::USER(nick.to_owned(), env!("CARGO_PKG_NAME").to_owned()).into(),
     ];
     if !pass.is_empty() {
         preamble.push(Command::PASS(pass.to_owned()).into());

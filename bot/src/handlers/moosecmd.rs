@@ -1,3 +1,5 @@
+use crate::debug;
+
 pub const HELP_RESP: &str =
     "usage: ^[.!]?moose(?:img|search|me)? [--latest|--random|--search|--image|--] [moosename]";
 
@@ -11,7 +13,8 @@ pub enum MComm {
 
 impl<'a> From<(PComm, &'a str)> for MComm {
     fn from(value: (PComm, &'a str)) -> Self {
-        let m = value.1.trim().to_owned();
+        debug!("DEBUG: CMD PARSED {value:?}");
+        let m = value.1.to_owned();
         match value.0 {
             PComm::Search => Self::Search(m),
             PComm::Image => Self::Image(m),
@@ -20,6 +23,7 @@ impl<'a> From<(PComm, &'a str)> for MComm {
     }
 }
 
+#[derive(Debug)]
 enum PComm {
     Search,
     Image,
