@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use governor::clock::Clock as _;
 use irc::proto::{Command, Message, Source, User, command::Numeric};
 use tokio::sync::{RwLock, mpsc::Sender};
 
@@ -97,38 +98,42 @@ pub async fn handle(
                         match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
                             Ok(moose) => {
                                 // TODO: fix this crap.
-                                if rstate.moose_delay.check().is_ok() {
-                                    match get_irclines(
-                                        &rstate.moose_client,
-                                        &rstate.moose_url,
-                                        &moose,
-                                    )
-                                    .await
-                                    {
-                                        Ok(lines) => {
-                                            lines.lines().for_each(|line| {
-                                                sendo.send_moose(
-                                                    Command::PRIVMSG(
-                                                        channel.clone(),
-                                                        line.to_owned(),
-                                                    )
-                                                    .into(),
-                                                )
-                                            });
-                                            return;
-                                        }
-                                        Err(e) => e.to_string(),
-                                    }
-                                } else {
-                                    sendo.lossy_send(
-                                        Command::NOTICE(
-                                            sender,
-                                            "Please wait before asking for another moose."
-                                                .to_owned(),
+                                match rstate.moose_delay.check() {
+                                    Ok(_) => {
+                                        match get_irclines(
+                                            &rstate.moose_client,
+                                            &rstate.moose_url,
+                                            &moose,
                                         )
-                                        .into(),
-                                    );
-                                    return;
+                                        .await
+                                        {
+                                            Ok(lines) => {
+                                                lines.lines().for_each(|line| {
+                                                    sendo.send_moose(
+                                                        Command::PRIVMSG(
+                                                            channel.clone(),
+                                                            line.to_owned(),
+                                                        )
+                                                        .into(),
+                                                    )
+                                                });
+                                                return;
+                                            }
+                                            Err(e) => e.to_string(),
+                                        }
+                                    }
+                                    Err(not_until) => {
+                                        let start = rstate.moose_delay.clock().now();
+                                        let retry_after = not_until.wait_time_from(start).as_secs();
+                                        sendo.lossy_send(
+                                            Command::NOTICE(
+                                                sender,
+                                                format!("Please wait ~{retry_after} second(s) before asking for another moose."),
+                                            )
+                                            .into(),
+                                        );
+                                        return;
+                                    }
                                 }
                             }
                             Err(e) => e.to_string(),
