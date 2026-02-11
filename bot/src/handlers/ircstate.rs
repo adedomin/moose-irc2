@@ -1,6 +1,12 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, num::NonZero, time::Duration};
 
-use leaky_bucket::RateLimiter;
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+};
+
+// use leaky_bucket::RateLimiter;
 
 pub const APP_NAME: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -11,7 +17,7 @@ pub struct IrcState {
     pub channels: HashSet<String>,
     pub moose_url: String,
     pub moose_client: reqwest::Client,
-    pub moose_delay: RateLimiter,
+    pub moose_delay: RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
 }
 
 impl IrcState {
@@ -22,18 +28,28 @@ impl IrcState {
         moose_url: String,
         moose_delay: Duration,
     ) -> Self {
+        let moose_delay = if moose_delay.is_zero() {
+            Duration::from_secs(1)
+        } else {
+            moose_delay
+        };
+        let moose_delay = RateLimiter::direct(
+            Quota::with_period(moose_delay)
+                .unwrap()
+                .allow_burst(NonZero::<u32>::new(1).unwrap()),
+        );
         // TODO: better way of handling this...
-        let moose_delay = RateLimiter::builder()
-            .fair(false)
-            .max(1)
-            .initial(1)
-            .interval(if moose_delay.is_zero() {
-                Duration::from_secs(1)
-            } else {
-                moose_delay
-            })
-            .refill(1)
-            .build();
+        // let moose_delay = RateLimiter::builder()
+        //     .fair(false)
+        //     .max(1)
+        //     .initial(1)
+        //     .interval(if moose_delay.is_zero() {
+        //         Duration::from_secs(1)
+        //     } else {
+        //         moose_delay
+        //     })
+        //     .refill(1)
+        //     .build();
         let moose_client = reqwest::Client::builder()
             .user_agent(APP_NAME)
             .timeout(Duration::from_secs(5))

@@ -15,8 +15,7 @@ rand = { version = "0.9", features = ["thread_rng"], default-features = false }
 reqwest = { version = "0.13", default-features = false, features = ["json", "default-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-leaky-bucket = "1.1.2"
+governor = { version = "0.10", default-features = false, features = ["std"] }
 tokio = { version = "1", default-features = false, features = ["rt", "net", "macros", "io-util", "fs", "signal"] }
 tokio-util = { version = "0.7", features = [] } 
-tokio-stream =  { version = "0.1.18", default-features = false, features = [] }
 thiserror = "2"

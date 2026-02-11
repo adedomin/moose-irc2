@@ -1,16 +1,12 @@
-use std::time::Duration;
+use std::{num::NonZero, time::Duration};
 
-use futures::{
-    SinkExt, StreamExt,
-    stream::{PollNext, SelectWithStrategy, SplitSink, select_with_strategy},
-};
+use futures::{SinkExt, stream::SplitSink};
+use governor::{Quota, RateLimiter};
 use irc::{Codec, Connection, proto::Message};
-use leaky_bucket::RateLimiter;
 use tokio::{
     sync::mpsc::{self},
     task::JoinHandle,
 };
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
@@ -33,53 +29,49 @@ impl Sender {
     }
 }
 
-type StratFnType = for<'a> fn(&'a mut ()) -> PollNext;
-pub type Receiver =
-    SelectWithStrategy<ReceiverStream<Message>, ReceiverStream<Message>, StratFnType, ()>;
-
-fn prio_left(_: &mut ()) -> PollNext {
-    PollNext::Left
+pub struct Receiver {
+    msg_r: mpsc::Receiver<Message>,
+    moose_r: mpsc::Receiver<Message>,
 }
 
 pub fn create_send_recv_pair() -> (Sender, Receiver) {
     let (msg, msg_r) = mpsc::channel(64);
     let (moose, moose_r) = mpsc::channel(64);
-    let recv = select_with_strategy(
-        ReceiverStream::new(msg_r),
-        ReceiverStream::new(moose_r),
-        prio_left as StratFnType, // left = higher priority
-    );
-    (Sender { msg, moose }, recv)
+    (Sender { msg, moose }, Receiver { msg_r, moose_r })
 }
 
 pub fn sender_task(
-    send_burst: usize,
+    send_burst: Option<NonZero<u32>>,
     send_delay: Duration,
     mut send: SplitSink<Connection<Codec>, Message>,
-    mut recv: Receiver,
+    recv: Receiver,
     stop_token: CancellationToken,
 ) -> JoinHandle<()> {
-    let send_burst = if send_burst == 0 { 1 } else { send_burst };
     let interval = if send_delay.is_zero() {
         None
     } else {
-        let rl = RateLimiter::builder()
-            .fair(false)
-            .max(send_burst)
-            .initial(send_burst)
-            .interval(send_delay)
-            .refill(1)
-            .build();
+        let send_burst = send_burst.unwrap_or_else(|| NonZero::<u32>::new(1).unwrap());
+        let rl = RateLimiter::direct(
+            Quota::with_period(send_delay)
+                .unwrap()
+                .allow_burst(send_burst),
+        );
         Some(rl)
     };
+    let Receiver {
+        mut msg_r,
+        mut moose_r,
+    } = recv;
     tokio::task::spawn(async move {
         let _dropg = stop_token.drop_guard_ref();
         while let Some(msg) = tokio::select! {
-            m = recv.next() => m,
+            biased;
+            m = msg_r.recv() => m,
+            m = moose_r.recv() => m,
             _ = stop_token.cancelled() => None,
         } {
             if let Some(i) = interval.as_ref() {
-                i.acquire_one().await;
+                i.until_ready().await;
             }
             if let Err(e) = send.send(msg).await {
                 eprintln!("ERR: [task/sender] IO error: {e}");

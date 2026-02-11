@@ -18,6 +18,7 @@ use std::{
     collections::HashSet,
     fs,
     io::{self, BufReader, Write},
+    num::NonZero,
     path::{Path, PathBuf},
     process::exit,
     time::Duration,
@@ -34,7 +35,7 @@ pub struct Config {
     pub tls: bool,
     pub nickserv: Option<String>,
     #[serde(default, alias = "send-burst")]
-    pub send_burst: usize,
+    pub send_burst: Option<NonZero<u32>>,
     #[serde(default, deserialize_with = "from_dur_str", alias = "send-delay")]
     pub send_delay: Duration,
     #[serde(default, deserialize_with = "from_dur_str", alias = "moose-delay")]

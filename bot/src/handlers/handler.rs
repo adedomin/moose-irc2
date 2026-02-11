@@ -97,7 +97,7 @@ pub async fn handle(
                         match resolve_moosename(&rstate.moose_client, &rstate.moose_url, &q).await {
                             Ok(moose) => {
                                 // TODO: fix this crap.
-                                if rstate.moose_delay.try_acquire(1) {
+                                if rstate.moose_delay.check().is_ok() {
                                     match get_irclines(
                                         &rstate.moose_client,
                                         &rstate.moose_url,
