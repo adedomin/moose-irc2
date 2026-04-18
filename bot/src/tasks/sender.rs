@@ -66,9 +66,9 @@ pub fn sender_task(
         let _dropg = stop_token.drop_guard_ref();
         while let Some(msg) = tokio::select! {
             biased;
+            _ = stop_token.cancelled() => None,
             m = msg_r.recv() => m,
             m = moose_r.recv() => m,
-            _ = stop_token.cancelled() => None,
         } {
             if let Some(i) = interval.as_ref() {
                 i.until_ready().await;
