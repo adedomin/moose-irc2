@@ -84,7 +84,7 @@ async fn handle_priv_cmd(
 
 pub fn handle(
     state: &IrcState,
-    task_lim: Arc<Semaphore>,
+    task_lim: &Semaphore,
     msg: Message,
     disable_search: bool,
     sendo: sender::Sender,
@@ -92,8 +92,9 @@ pub fn handle(
 ) -> Option<String> {
     macro_rules! spawn_task {
         ( $($fut:tt)* ) => {{
-            if let Ok(_s) = task_lim.try_acquire() {
+            if let Ok(s) = task_lim.try_acquire() {
                 tokio::spawn(async move { $($fut)*.await; });
+                drop(s);
             } else {
                 eprintln!("WARN: [irc] Too many I/O tasks; dropping messages.");
             }

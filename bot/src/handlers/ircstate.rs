@@ -48,15 +48,16 @@ impl IrcState {
         moose_url: String,
         moose_delay: Duration,
     ) -> Self {
-        let moose_delay = if moose_delay.is_zero() {
+        let moose_delay = Arc::new(if moose_delay.is_zero() {
             MooseLim::None
         } else {
-            MooseLim::RateLim(RateLimiter::direct(
+            let lim = RateLimiter::direct(
                 Quota::with_period(moose_delay)
                     .unwrap()
                     .allow_burst(NonZero::<u32>::new(1).unwrap()),
-            ))
-        };
+            );
+            MooseLim::RateLim(lim)
+        });
         let moose_client = reqwest::Client::builder()
             .user_agent(APP_NAME)
             .timeout(Duration::from_secs(5))
@@ -69,7 +70,7 @@ impl IrcState {
             channels,
             moose_url,
             moose_client,
-            moose_delay: Arc::new(moose_delay),
+            moose_delay,
         }
     }
 }

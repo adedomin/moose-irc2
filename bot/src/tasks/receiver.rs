@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use futures::{StreamExt, stream::SplitStream};
 use irc::{Codec, Connection, proto::Command};
@@ -38,7 +38,7 @@ pub fn receiver_task(
             config.moose_url,
             config.moose_delay,
         );
-        let task_limit = Arc::new(Semaphore::new(64));
+        let task_limit = Semaphore::new(64);
         let mut double_timeout = false;
         'l: while let Some(msg) = tokio::select! {
                 m = recv.next() => m,
@@ -64,10 +64,10 @@ pub fn receiver_task(
             match msg {
                 Ok(Ok(msg)) => {
                     if let Some(new_nick) = capture_clone! {
-                        (task_limit, sendo, sendi)
+                        (sendo, sendi)
                         handler::handle(
                             &irc_state,
-                            task_limit,
+                            &task_limit,
                             msg,
                             config.disable_search,
                             sendo,
