@@ -96,12 +96,24 @@ pub fn client_config(server: &'_ str, port: u16, tls: bool) -> irc::connection::
 
 #[macro_export]
 macro_rules! capture_clone {
+    // simple case.
     ( ($( $x:ident ),*) $y:expr ) => {
         {
             $(let $x = $x.clone();)*
             $y
         }
     };
+    // handle  idents like: self.something.ident
+    // the last part, .ident in this case, gets a let binding.
+    ( ($( $($expr:ident).* ),*) $y:expr ) => {
+        {
+            $(capture_clone!(@bind $($expr)*);)*
+            $y
+        }
+    };
+    (@bind $( $head:ident ).+ $tail:ident ) => {
+        let $tail = $($head)+.$tail.clone();
+    }
 }
 
 #[macro_export]

@@ -153,20 +153,19 @@ pub fn handle(
         }
         Command::PRIVMSG(channel, msg) => {
             if let Some(comm) = parse_moose_args(&msg) {
-                let url = state.moose_url.clone();
-                let delay = state.moose_delay.clone();
-                // behind arc already.
-                let http_client = state.moose_client.clone();
-                spawn_task!(handle_priv_cmd(
-                    comm,
-                    channel,
-                    sender,
-                    disable_search,
-                    url,
-                    delay,
-                    http_client,
-                    sendo,
-                ));
+                capture_clone! {
+                    (state.moose_url, state.moose_delay, state.moose_client)
+                    spawn_task!(handle_priv_cmd(
+                        comm,
+                        channel,
+                        sender,
+                        disable_search,
+                        moose_url,
+                        moose_delay,
+                        moose_client,
+                        sendo,
+                    ))
+                };
             }
         }
         Command::Numeric(num, _params) => match num {
