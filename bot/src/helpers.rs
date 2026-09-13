@@ -107,11 +107,26 @@ pub fn client_config(server: &'_ str, port: u16, tls: bool) -> irc::connection::
 /// e.g. `let z = x.y.z.clone();`
 ///
 /// ```
-/// struct Y { z: &'static str }
-/// struct X { y: Y }
-/// let y = Y { z: "string" };
+/// struct Z {
+///     a: &'static str,
+///     b: &'static str,
+///     c: &'static str,
+/// }
+/// struct Y {
+///     z: Z,
+/// }
+/// struct X {
+///     y: Y,
+/// }
+/// let z = Z {
+///     a: "complex1",
+///     b: "complex2",
+///     c: "complex3",
+/// };
+/// let y = Y { z };
 /// let x = X { y };
-/// capture_clone! { (x.y.z) println!("{z}") }
+/// /// prints complex1, complex2, complex3
+/// capture_clone! { (x.y.z.a, x.y.z.b, x.y.z.c) println!("{a}, {b}, {c}") }
 /// ```
 macro_rules! capture_clone {
     ( ($( $($i:ident).* ),*) $y:expr ) => {
