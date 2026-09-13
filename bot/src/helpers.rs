@@ -95,25 +95,33 @@ pub fn client_config(server: &'_ str, port: u16, tls: bool) -> irc::connection::
 // }
 
 #[macro_export]
+/// Macro that clones elements for lambda captures.
+///
+/// e.g.
+/// ```
+/// let x = "string";
+/// capture_clone! { (x) println!("{x}") }
+/// ```
+///
+/// For dot traversal, the last dotted ident is let bound.
+/// e.g. `let z = x.y.z.clone();`
+///
+/// ```
+/// struct Y { z: &'static str }
+/// struct X { y: Y }
+/// let y = Y { z: "string" };
+/// let x = X { y };
+/// capture_clone! { (x.y.z) println!("{z}") }
+/// ```
 macro_rules! capture_clone {
-    // simple case.
-    ( ($( $x:ident ),*) $y:expr ) => {
+    ( ($( $($i:ident).* ),*) $y:expr ) => {
         {
-            $(let $x = $x.clone();)*
+            $(let capture_clone!(@last $($i).*) = $($i).*.clone();)*
             $y
         }
     };
-    // handle  idents like: self.something.ident
-    // the last part, .ident in this case, gets a let binding.
-    ( ($( $($expr:ident).* ),*) $y:expr ) => {
-        {
-            $(capture_clone!(@bind $($expr)*);)*
-            $y
-        }
-    };
-    (@bind $( $head:ident ).+ $tail:ident ) => {
-        let $tail = $($head)+.$tail.clone();
-    }
+    (@last $x:ident) => ( $x );
+    (@last $x:ident. $($xs:ident).+) => { capture_clone!(@last $($xs).+) };
 }
 
 #[macro_export]
