@@ -9,7 +9,7 @@ pub type ParseResult<T = Message, E = parse::Error> = std::result::Result<T, E>;
 pub struct Codec;
 
 const BUF_MAX: usize = 2usize.pow(16);
-const LINE_END: [u8; 2] = [b'\r', b'\n'];
+const LINE_END: [u8; 2] = *b"\r\n";
 
 fn find_eom(buf: &[u8]) -> Option<usize> {
     buf.iter().position(|chr| LINE_END.contains(chr))

@@ -148,7 +148,7 @@ fn write_default<P>(config_path: P)
 where
     P: std::fmt::Debug + AsRef<Path>,
 {
-    println!("Creating example configuration at: {:?}", &config_path);
+    println!("Creating example configuration at: {config_path:?}");
     create_parent_dirs(&config_path).unwrap();
     let mut file = std::fs::File::create(&config_path).unwrap();
     file.write_all(EXAMPLE_CONFIG).unwrap();

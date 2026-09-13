@@ -1,4 +1,4 @@
-use std::{collections::HashSet, num::NonZero, time::Duration};
+use std::{collections::HashSet, num::NonZero, sync::Arc, time::Duration};
 
 use governor::{
     Quota, RateLimiter,
@@ -37,7 +37,7 @@ pub struct IrcState {
     pub channels: HashSet<String>,
     pub moose_url: String,
     pub moose_client: reqwest::Client,
-    pub moose_delay: MooseLim,
+    pub moose_delay: Arc<MooseLim>,
 }
 
 impl IrcState {
@@ -69,7 +69,7 @@ impl IrcState {
             channels,
             moose_url,
             moose_client,
-            moose_delay,
+            moose_delay: Arc::new(moose_delay),
         }
     }
 }
