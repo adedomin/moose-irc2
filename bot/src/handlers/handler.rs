@@ -82,6 +82,12 @@ async fn handle_priv_cmd(
         .await;
 }
 
+pub enum HandlerEvents {
+    None,
+    Quit,
+    NewNick(String),
+}
+
 pub fn handle(
     state: &IrcState,
     task_lim: &Semaphore,
@@ -89,7 +95,7 @@ pub fn handle(
     disable_search: bool,
     sendo: sender::Sender,
     sendi: Sender<InviteMsg>,
-) -> Option<String> {
+) -> HandlerEvents {
     macro_rules! spawn_task {
         ( $($fut:tt)* ) => {{
             if let Ok(s) = task_lim.try_acquire() {
@@ -100,6 +106,9 @@ pub fn handle(
             }
         }};
     }
+    macro_rules! spawn_task_nolim {
+        ( $($fut:tt)* ) => {{ tokio::spawn(async move { $($fut)*.await; }); }};
+    }
     let sender = match msg.source {
         Some(Source::Server(server)) => server,
         Some(Source::User(User { nickname, .. })) => nickname,
@@ -107,14 +116,15 @@ pub fn handle(
     };
     match msg.command {
         Command::PING(pong) => {
-            spawn_task!(sendo.send(Command::PONG(pong, None).into()))
+            spawn_task_nolim!(sendo.send(Command::PONG(pong, None).into()))
         }
         Command::PONG(_pong, _) => {
             debug!("DEBUG: [irc] recv PONG {_pong}");
         }
         Command::ERROR(banned) => {
             eprintln!("ERR: [irc] Banned (?): {banned}");
-            spawn_task!(sendo.send(Command::QUIT(None).into()));
+            spawn_task_nolim!(sendo.send(Command::QUIT(None).into()));
+            return HandlerEvents::Quit;
         }
         Command::JOIN(channel, _) if state.current_nick == sender => {
             eprintln!("INFO: [irc] Joined {channel}");
@@ -122,9 +132,7 @@ pub fn handle(
         // shouldn't happen?
         Command::PART(channel, _) if state.current_nick == sender => {
             eprintln!("INFO: [irc] Parted {channel}");
-            tokio::spawn(async move {
-                let _ = sendi.send(InviteMsg::Kicked(channel)).await;
-            });
+            spawn_task_nolim!(let _ = sendi.send(InviteMsg::Kicked(channel)))
         }
         Command::INVITE(target, channel) if state.current_nick == target => {
             if sendi.try_send(InviteMsg::Joined(channel.clone())).is_ok() {
@@ -140,9 +148,7 @@ pub fn handle(
                 "INFO: [irc] Kicked from {channel} by {sender}; reason: {}",
                 reason.unwrap_or_default()
             );
-            tokio::spawn(async move {
-                let _ = sendi.send(InviteMsg::Kicked(channel)).await;
-            });
+            spawn_task_nolim!(let _ = sendi.send(InviteMsg::Kicked(channel)))
         }
         Command::PRIVMSG(channel, msg)
             if state.current_nick == channel && msg == "\x01VERSION\x01" =>
@@ -183,9 +189,8 @@ pub fn handle(
             }
             Numeric::ERR_ERRONEUSNICKNAME => {
                 eprintln!("ERR: [irc] Server does not like our nickname.");
-                tokio::spawn(async move {
-                    sendo.send(Command::QUIT(None).into()).await;
-                });
+                spawn_task_nolim!(sendo.send(Command::QUIT(None).into()));
+                return HandlerEvents::Quit;
             }
             Numeric::ERR_NICKNAMEINUSE | Numeric::ERR_NICKCOLLISION => {
                 eprintln!("WARN: [irc] Server claims we have a name conflict.");
@@ -197,17 +202,18 @@ pub fn handle(
                     capture_clone! { (sendo)
                         tokio::spawn(async move { sendo.send(Command::QUIT(None).into()).await; })
                     };
+                    return HandlerEvents::Quit;
                 } else {
                     capture_clone! {
                         (new_nick)
                         spawn_task!(sendo.send(Command::NICK(new_nick).into()))
                     }
-                    return Some(new_nick);
+                    return HandlerEvents::NewNick(new_nick);
                 }
             }
             _ => (),
         },
         _ => (),
     }
-    None
+    HandlerEvents::None
 }

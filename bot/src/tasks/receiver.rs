@@ -63,7 +63,7 @@ pub fn receiver_task(
             double_timeout = false;
             match msg {
                 Ok(Ok(msg)) => {
-                    if let Some(new_nick) = capture_clone! {
+                    match capture_clone! {
                         (sendo, sendi)
                         handler::handle(
                             &irc_state,
@@ -74,7 +74,9 @@ pub fn receiver_task(
                             sendi,
                         )
                     } {
-                        irc_state.current_nick = new_nick;
+                        handler::HandlerEvents::None => {}
+                        handler::HandlerEvents::Quit => break 'l,
+                        handler::HandlerEvents::NewNick(nick) => irc_state.current_nick = nick,
                     }
                 }
                 Ok(Err(e)) => match e {
@@ -84,7 +86,7 @@ pub fn receiver_task(
                 },
                 Err(e) => {
                     eprintln!("ERR: [tast/receiver] Stream error: {e}");
-                    break;
+                    break 'l;
                 }
             }
         }
